@@ -11,7 +11,7 @@ class MockStockService {
     return [
       Stock(
         symbol: '2330',
-        name: '台積電',
+        name: '台積電 [模擬]',
         currentPrice: 585.0,
         changeAmount: 5.0,
         changePercent: 0.86,
@@ -25,7 +25,7 @@ class MockStockService {
       ),
       Stock(
         symbol: '2317',
-        name: '鴻海',
+        name: '鴻海 [模擬]',
         currentPrice: 105.5,
         changeAmount: -1.5,
         changePercent: -1.40,
@@ -39,7 +39,7 @@ class MockStockService {
       ),
       Stock(
         symbol: '2454',
-        name: '聯發科',
+        name: '聯發科 [模擬]',
         currentPrice: 890.0,
         changeAmount: 15.0,
         changePercent: 1.71,
