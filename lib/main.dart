@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:provider/provider.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
@@ -9,6 +10,8 @@ import 'providers/watchlist_provider.dart';
 import 'providers/auth_provider.dart';
 import 'services/storage_service_factory.dart';
 import 'services/storage_service_firestore.dart';
+import 'services/update_service.dart';
+import 'widgets/update_dialog.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -90,6 +93,24 @@ class _AuthWrapperState extends State<AuthWrapper> {
       await watchlistProvider.init();
     } else {
       await watchlistProvider.init();
+    }
+
+    // Check for updates (only for mobile platforms, not web)
+    if (!kIsWeb) {
+      _checkForUpdates();
+    }
+  }
+
+  Future<void> _checkForUpdates() async {
+    final updateService = UpdateService();
+    final updateInfo = await updateService.checkForUpdate();
+
+    if (updateInfo != null && mounted) {
+      // Wait a bit for the UI to settle before showing the dialog
+      await Future.delayed(const Duration(seconds: 1));
+      if (mounted) {
+        UpdateDialog.show(context, updateInfo);
+      }
     }
   }
 

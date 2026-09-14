@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>股票分析 App - 下載</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            max-width: 500px;
+            width: 100%;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            text-align: center;
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 28px;
+        }
+
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+
+        .version-info {
+            background: #f5f5f5;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 30px;
+            text-align: left;
+        }
+
+        .version-info h3 {
+            color: #667eea;
+            margin-bottom: 10px;
+            font-size: 16px;
+        }
+
+        .version-info p {
+            color: #666;
+            line-height: 1.6;
+            margin: 5px 0;
+            font-size: 14px;
+        }
+
+        .download-btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 50px;
+            padding: 16px 40px;
+            font-size: 18px;
+            font-weight: bold;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-block;
+            transition: transform 0.2s, box-shadow 0.2s;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .download-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
+        }
+
+        .download-btn:active {
+            transform: translateY(0);
+        }
+
+        .features {
+            margin-top: 30px;
+            text-align: left;
+        }
+
+        .features h3 {
+            color: #333;
+            margin-bottom: 15px;
+            font-size: 18px;
+        }
+
+        .features ul {
+            list-style: none;
+        }
+
+        .features li {
+            color: #666;
+            padding: 8px 0;
+            padding-left: 25px;
+            position: relative;
+            font-size: 14px;
+        }
+
+        .features li:before {
+            content: "✓";
+            position: absolute;
+            left: 0;
+            color: #667eea;
+            font-weight: bold;
+        }
+
+        .note {
+            margin-top: 20px;
+            padding: 15px;
+            background: #fff3cd;
+            border-radius: 10px;
+            border-left: 4px solid #ffc107;
+            text-align: left;
+            font-size: 13px;
+            color: #856404;
+        }
+
+        @media (max-width: 600px) {
+            .container {
+                padding: 30px 20px;
+            }
+
+            h1 {
+                font-size: 24px;
+            }
+
+            .download-btn {
+                padding: 14px 30px;
+                font-size: 16px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📈 股票分析 App</h1>
+        <p class="subtitle">台股即時報價 · 智能分析</p>
+
+        <div class="version-info">
+            <h3>最新版本：v1.0.0</h3>
+            <p>📅 發布日期：2026-09-14</p>
+            <p>📦 檔案大小：約 20 MB</p>
+        </div>
+
+        <a href="https://github.com/shaubai/stock-app/releases/download/v1.0.0/stock-app-v1.0.0.apk" class="download-btn" download>
+            📱 下載 Android APK
+        </a>
+
+        <div class="features">
+            <h3>主要功能</h3>
+            <ul>
+                <li>台股即時報價查詢</li>
+                <li>股價每 30 秒自動刷新</li>
+                <li>搜尋任意台股代號</li>
+                <li>Firebase 帳號登入</li>
+                <li>雲端同步自選股清單</li>
+                <li>股票詳細資訊與歷史圖表</li>
+            </ul>
+        </div>
+
+        <div class="note">
+            <strong>⚠️ 安裝提示：</strong><br>
+            首次安裝需要在手機「設定」→「安全性」中，允許安裝「未知來源的應用程式」。
+        </div>
+    </div>
+
+    <script>
+        // Track download
+        document.querySelector('.download-btn').addEventListener('click', function() {
+            console.log('APK download initiated');
+        });
+    </script>
+</body>
+</html>
