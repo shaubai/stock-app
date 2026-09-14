@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/stock.dart';
@@ -23,6 +24,11 @@ class _StockListScreenState extends State<StockListScreen> {
   bool _isSearching = false;
   bool _isSearchingApi = false;
 
+  // 自動更新相關
+  Timer? _autoRefreshTimer;
+  DateTime? _lastUpdateTime;
+  static const Duration _refreshInterval = Duration(seconds: 30);
+
   // 預設顯示的台股清單（熱門股票）
   static const List<String> _defaultTaiwanStocks = [
     '2330', // 台積電
@@ -40,10 +46,21 @@ class _StockListScreenState extends State<StockListScreen> {
     super.initState();
     _loadStocks();
     _searchController.addListener(_onSearchChanged);
+    _startAutoRefresh();
+  }
+
+  void _startAutoRefresh() {
+    _autoRefreshTimer = Timer.periodic(_refreshInterval, (timer) {
+      // 只在不搜尋時自動刷新
+      if (!_isSearching && mounted) {
+        _loadStocks(showLoading: false); // 靜默刷新，不顯示 loading
+      }
+    });
   }
 
   @override
   void dispose() {
+    _autoRefreshTimer?.cancel();
     _searchController.removeListener(_onSearchChanged);
     _searchController.dispose();
     super.dispose();
@@ -81,8 +98,10 @@ class _StockListScreenState extends State<StockListScreen> {
     }
   }
 
-  Future<void> _loadStocks() async {
-    setState(() => _isLoading = true);
+  Future<void> _loadStocks({bool showLoading = true}) async {
+    if (showLoading) {
+      setState(() => _isLoading = true);
+    }
 
     try {
       // 使用真實 API（所有平台）
@@ -91,18 +110,40 @@ class _StockListScreenState extends State<StockListScreen> {
       if (mounted) {
         setState(() {
           _stocks = stocks;
-          _isLoading = false;
+          _lastUpdateTime = DateTime.now();
+          if (showLoading) {
+            _isLoading = false;
+          }
         });
       }
     } catch (e) {
       if (mounted) {
-        setState(() => _isLoading = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('載入股票資料失敗: $e'),
-          ),
-        );
+        if (showLoading) {
+          setState(() => _isLoading = false);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('載入股票資料失敗: $e'),
+            ),
+          );
+        }
+        // 靜默刷新失敗時不顯示錯誤，避免打斷用戶
       }
+    }
+  }
+
+  String _formatUpdateTime(DateTime time) {
+    final now = DateTime.now();
+    final difference = now.difference(time);
+
+    if (difference.inSeconds < 10) {
+      return '剛剛';
+    } else if (difference.inSeconds < 60) {
+      return '${difference.inSeconds}秒前';
+    } else if (difference.inMinutes < 60) {
+      return '${difference.inMinutes}分鐘前';
+    } else {
+      // 顯示具體時間
+      return '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}';
     }
   }
 
@@ -136,13 +177,28 @@ class _StockListScreenState extends State<StockListScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('股票看板'),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('股票看板'),
+            if (_lastUpdateTime != null)
+              Text(
+                '更新: ${_formatUpdateTime(_lastUpdateTime!)}',
+                style: const TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.normal,
+                ),
+              ),
+          ],
+        ),
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
         actions: [
           if (!_isSearching)
             IconButton(
               icon: const Icon(Icons.refresh),
               onPressed: _loadStocks,
+              tooltip: '手動刷新',
             ),
         ],
       ),
