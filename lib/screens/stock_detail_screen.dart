@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../models/stock.dart';
 import '../models/historical_data.dart';
 import '../services/mock_stock_service.dart';
+import '../providers/watchlist_provider.dart';
 import '../widgets/stock_chart.dart';
 
 class StockDetailScreen extends StatefulWidget {
@@ -77,12 +79,29 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
         ),
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
         actions: [
-          IconButton(
-            icon: const Icon(Icons.star_border),
-            onPressed: () {
-              // TODO: 加入自選股功能
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('自選股功能開發中')),
+          Consumer<WatchlistProvider>(
+            builder: (context, watchlist, child) {
+              final isInWatchlist = watchlist.isInWatchlist(widget.stock.symbol);
+              return IconButton(
+                icon: Icon(
+                  isInWatchlist ? Icons.favorite : Icons.favorite_border,
+                  color: isInWatchlist ? Colors.red : null,
+                ),
+                onPressed: () async {
+                  await watchlist.toggleWatchlist(widget.stock.symbol);
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          isInWatchlist
+                              ? '已從自選股移除 ${widget.stock.symbol}'
+                              : '已加入自選股 ${widget.stock.symbol}',
+                        ),
+                        duration: const Duration(seconds: 1),
+                      ),
+                    );
+                  }
+                },
               );
             },
           ),

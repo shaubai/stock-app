@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../models/stock.dart';
 import '../services/mock_stock_service.dart';
+import '../providers/watchlist_provider.dart';
 import 'stock_detail_screen.dart';
 
 class StockListScreen extends StatefulWidget {
@@ -126,25 +128,64 @@ class _StockListScreenState extends State<StockListScreen> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      stock.symbol,
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Flexible(
+                            child: Text(
+                              stock.symbol,
+                              style: const TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Consumer<WatchlistProvider>(
+                            builder: (context, watchlist, child) {
+                              final isInWatchlist = watchlist.isInWatchlist(stock.symbol);
+                              return GestureDetector(
+                                onTap: () async {
+                                  await watchlist.toggleWatchlist(stock.symbol);
+                                  if (mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: Text(
+                                          isInWatchlist
+                                              ? '已從自選股移除 ${stock.symbol}'
+                                              : '已加入自選股 ${stock.symbol}',
+                                        ),
+                                        duration: const Duration(seconds: 1),
+                                      ),
+                                    );
+                                  }
+                                },
+                                child: Icon(
+                                  isInWatchlist ? Icons.favorite : Icons.favorite_border,
+                                  color: isInWatchlist ? Colors.red : Colors.grey,
+                                  size: 20,
+                                ),
+                              );
+                            },
+                          ),
+                        ],
                       ),
-                    ),
-                    Text(
-                      stock.name,
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.grey[600],
+                      Text(
+                        stock.name,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey[600],
+                        ),
+                        overflow: TextOverflow.ellipsis,
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
+                const SizedBox(width: 8),
                 Container(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 8,
@@ -219,6 +260,32 @@ class _StockListScreenState extends State<StockListScreen> {
         );
       },
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      leading: Consumer<WatchlistProvider>(
+        builder: (context, watchlist, child) {
+          final isInWatchlist = watchlist.isInWatchlist(stock.symbol);
+          return GestureDetector(
+            onTap: () async {
+              await watchlist.toggleWatchlist(stock.symbol);
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      isInWatchlist
+                          ? '已從自選股移除 ${stock.symbol}'
+                          : '已加入自選股 ${stock.symbol}',
+                    ),
+                    duration: const Duration(seconds: 1),
+                  ),
+                );
+              }
+            },
+            child: Icon(
+              isInWatchlist ? Icons.favorite : Icons.favorite_border,
+              color: isInWatchlist ? Colors.red : Colors.grey,
+            ),
+          );
+        },
+      ),
       title: Row(
         children: [
           Text(
