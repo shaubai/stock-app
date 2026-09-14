@@ -1,14 +1,25 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'firebase_options.dart';
 import 'screens/stock_list_screen.dart';
+import 'screens/watchlist_screen.dart';
+import 'screens/login_screen.dart';
 import 'providers/watchlist_provider.dart';
+import 'providers/auth_provider.dart';
+import 'services/storage_service_factory.dart';
+import 'services/storage_service_firestore.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Initialize watchlist provider
-  final watchlistProvider = WatchlistProvider();
-  await watchlistProvider.init();
+  // Initialize Firebase
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
+
+  // Initialize with local storage first (will switch to Firestore after login)
+  final watchlistProvider = WatchlistProvider(createStorageService());
 
   runApp(MyApp(watchlistProvider: watchlistProvider));
 }
@@ -22,6 +33,7 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
+        ChangeNotifierProvider(create: (_) => AuthProvider()),
         ChangeNotifierProvider.value(value: watchlistProvider),
       ],
       child: MaterialApp(
@@ -30,8 +42,200 @@ class MyApp extends StatelessWidget {
           colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
           useMaterial3: true,
         ),
-        home: const StockListScreen(),
+        home: const AuthWrapper(),
         debugShowCheckedModeBanner: false,
+      ),
+    );
+  }
+}
+
+class AuthWrapper extends StatefulWidget {
+  const AuthWrapper({super.key});
+
+  @override
+  State<AuthWrapper> createState() => _AuthWrapperState();
+}
+
+class _AuthWrapperState extends State<AuthWrapper> {
+  @override
+  void initState() {
+    super.initState();
+    _initializeAuth();
+  }
+
+  Future<void> _initializeAuth() async {
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final watchlistProvider = Provider.of<WatchlistProvider>(context, listen: false);
+
+    // Listen to auth changes
+    authProvider.addListener(() async {
+      final userId = authProvider.userId;
+      if (userId != null) {
+        // User logged in - switch to Firestore storage
+        final firestoreStorage = StorageServiceFirestore(userId);
+        watchlistProvider.updateStorageService(firestoreStorage);
+        await watchlistProvider.init();
+      } else {
+        // User logged out - switch back to local storage
+        watchlistProvider.updateStorageService(createStorageService());
+        await watchlistProvider.init();
+      }
+    });
+
+    // Initialize based on current auth state
+    if (authProvider.isSignedIn) {
+      final userId = authProvider.userId!;
+      final firestoreStorage = StorageServiceFirestore(userId);
+      watchlistProvider.updateStorageService(firestoreStorage);
+      await watchlistProvider.init();
+    } else {
+      await watchlistProvider.init();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Consumer<AuthProvider>(
+      builder: (context, authProvider, _) {
+        if (authProvider.isLoading) {
+          return const Scaffold(
+            body: Center(child: CircularProgressIndicator()),
+          );
+        }
+
+        if (authProvider.isSignedIn) {
+          return const MainScreen();
+        }
+
+        return const LoginScreen();
+      },
+    );
+  }
+}
+
+class MainScreen extends StatefulWidget {
+  const MainScreen({super.key});
+
+  @override
+  State<MainScreen> createState() => _MainScreenState();
+}
+
+class _MainScreenState extends State<MainScreen> {
+  int _currentIndex = 0;
+
+  final List<Widget> _screens = const [
+    StockListScreen(),
+    WatchlistScreen(),
+    ProfileScreen(),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: _screens[_currentIndex],
+      bottomNavigationBar: BottomNavigationBar(
+        currentIndex: _currentIndex,
+        onTap: (index) {
+          setState(() {
+            _currentIndex = index;
+          });
+        },
+        items: const [
+          BottomNavigationBarItem(
+            icon: Icon(Icons.show_chart),
+            label: '股票看板',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.favorite),
+            label: '自選股',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.person),
+            label: '個人',
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class ProfileScreen extends StatelessWidget {
+  const ProfileScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final authProvider = Provider.of<AuthProvider>(context);
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('個人資訊'),
+        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
+      ),
+      body: ListView(
+        children: [
+          const SizedBox(height: 20),
+          CircleAvatar(
+            radius: 50,
+            backgroundColor: Theme.of(context).colorScheme.primary,
+            child: Text(
+              authProvider.displayName[0].toUpperCase(),
+              style: const TextStyle(fontSize: 40, color: Colors.white),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Center(
+            child: Text(
+              authProvider.displayName,
+              style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+            ),
+          ),
+          if (authProvider.userEmail != null)
+            Center(
+              child: Text(
+                authProvider.userEmail!,
+                style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+              ),
+            ),
+          if (authProvider.isAnonymous)
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.all(8.0),
+                child: Text(
+                  '匿名用戶',
+                  style: TextStyle(fontSize: 12, color: Colors.orange[700]),
+                ),
+              ),
+            ),
+          const SizedBox(height: 32),
+          const Divider(),
+          ListTile(
+            leading: const Icon(Icons.logout, color: Colors.red),
+            title: const Text('登出', style: TextStyle(color: Colors.red)),
+            onTap: () async {
+              final confirmed = await showDialog<bool>(
+                context: context,
+                builder: (context) => AlertDialog(
+                  title: const Text('確認登出'),
+                  content: const Text('確定要登出嗎？'),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context, false),
+                      child: const Text('取消'),
+                    ),
+                    TextButton(
+                      onPressed: () => Navigator.pop(context, true),
+                      child: const Text('確定'),
+                    ),
+                  ],
+                ),
+              );
+
+              if (confirmed == true && context.mounted) {
+                await authProvider.signOut();
+              }
+            },
+          ),
+        ],
       ),
     );
   }

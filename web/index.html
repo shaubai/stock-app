@@ -29,8 +29,27 @@
   <!-- Favicon -->
   <link rel="icon" type="image/png" href="favicon.png"/>
 
-  <title>stock_app</title>
+  <title>Stock App - 智能股票分析</title>
   <link rel="manifest" href="manifest.json">
+
+  <!-- Firebase SDK -->
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore-compat.js"></script>
+  <script>
+    // Your web app's Firebase configuration
+    const firebaseConfig = {
+      apiKey: "AIzaSyD5F0mZINZCRYFxg6SCctTa0Yl7FIOxf_4",
+      authDomain: "nav-stock-analysis-app-16f6d.firebaseapp.com",
+      projectId: "nav-stock-analysis-app-16f6d",
+      storageBucket: "nav-stock-analysis-app-16f6d.firebasestorage.app",
+      messagingSenderId: "952983237872",
+      appId: "1:952983237872:web:11bce99b73f70f9a8f7e35",
+      measurementId: "G-QPK25SNPTV"
+    };
+    // Initialize Firebase
+    firebase.initializeApp(firebaseConfig);
+  </script>
 </head>
 <body>
   <!--

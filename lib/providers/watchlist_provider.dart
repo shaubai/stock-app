@@ -1,16 +1,17 @@
 import 'package:flutter/foundation.dart';
 import '../services/storage_service.dart';
-import '../services/storage_service_factory.dart';
 
 /// Provider for managing watchlist state
 ///
 /// This provider handles adding/removing stocks from the watchlist
 /// and persisting the data across app sessions using StorageService.
 class WatchlistProvider with ChangeNotifier {
-  final StorageService _storageService = createStorageService();
+  StorageService _storageService;
   final Set<String> _watchlistSymbols = {};
   bool _isInitialized = false;
   bool _isLoading = false;
+
+  WatchlistProvider(this._storageService);
 
   /// Get a copy of the watchlist symbols
   List<String> get watchlistSymbols => _watchlistSymbols.toList();
@@ -24,6 +25,14 @@ class WatchlistProvider with ChangeNotifier {
   /// Get the number of symbols in watchlist
   int get count => _watchlistSymbols.length;
 
+  /// Update storage service (e.g., when user logs in/out)
+  void updateStorageService(StorageService newService) {
+    _storageService = newService;
+    _isInitialized = false;
+    _watchlistSymbols.clear();
+    notifyListeners();
+  }
+
   /// Initialize the provider and load saved watchlist
   Future<void> init() async {
     if (_isInitialized) return;
@@ -34,6 +43,7 @@ class WatchlistProvider with ChangeNotifier {
     try {
       await _storageService.init();
       final symbols = await _storageService.loadWatchlist();
+      _watchlistSymbols.clear();
       _watchlistSymbols.addAll(symbols);
       _isInitialized = true;
     } catch (e) {

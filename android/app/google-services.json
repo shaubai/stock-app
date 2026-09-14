@@ -1,0 +1,46 @@
+{
+  "project_info": {
+    "project_number": "952983237872",
+    "project_id": "nav-stock-analysis-app-16f6d",
+    "storage_bucket": "nav-stock-analysis-app-16f6d.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:952983237872:android:8fc3944e31a4a3138f7e35",
+        "android_client_info": {
+          "package_name": "com.example.stock_app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "952983237872-11r34as8f3bj2rb30do8idgsg7pquqgf.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBwYMqiZx3Rl2o4ma-4ah3Ka6EeOrbI-9A"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "952983237872-11r34as8f3bj2rb30do8idgsg7pquqgf.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "952983237872-hr304jjt8po5b5ctmnjnn41c73rvpps4.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.stockApp"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
