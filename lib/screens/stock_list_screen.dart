@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../models/stock.dart';
 import '../services/stock_service.dart';
 import '../providers/watchlist_provider.dart';
+import '../data/stock_list.dart';
 import 'stock_detail_screen.dart';
 
 class StockListScreen extends StatefulWidget {
@@ -14,8 +15,11 @@ class StockListScreen extends StatefulWidget {
 
 class _StockListScreenState extends State<StockListScreen> {
   final StockService _stockService = StockService();
+  final TextEditingController _searchController = TextEditingController();
   List<Stock> _stocks = [];
+  List<StockListItem> _searchResults = [];
   bool _isLoading = false;
+  bool _isSearching = false;
 
   // 預設顯示的台股清單（熱門股票）
   static const List<String> _defaultTaiwanStocks = [
@@ -33,6 +37,22 @@ class _StockListScreenState extends State<StockListScreen> {
   void initState() {
     super.initState();
     _loadStocks();
+    _searchController.addListener(_onSearchChanged);
+  }
+
+  @override
+  void dispose() {
+    _searchController.removeListener(_onSearchChanged);
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  void _onSearchChanged() {
+    final query = _searchController.text;
+    setState(() {
+      _isSearching = query.isNotEmpty;
+      _searchResults = TaiwanStockList.search(query);
+    });
   }
 
   Future<void> _loadStocks() async {
@@ -60,6 +80,30 @@ class _StockListScreenState extends State<StockListScreen> {
     }
   }
 
+  Future<void> _loadAndShowStock(String symbol) async {
+    try {
+      final stock = await _stockService.getTaiwanStock(symbol);
+      if (stock != null && mounted) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => StockDetailScreen(stock: stock),
+          ),
+        );
+      } else if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('無法載入股票資料')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('載入失敗: $e')),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final isTablet = MediaQuery.of(context).size.width >= 600;
@@ -69,15 +113,131 @@ class _StockListScreenState extends State<StockListScreen> {
         title: const Text('股票看板'),
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
         actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _loadStocks,
+          if (!_isSearching)
+            IconButton(
+              icon: const Icon(Icons.refresh),
+              onPressed: _loadStocks,
+            ),
+        ],
+      ),
+      body: Column(
+        children: [
+          // 搜尋框
+          Container(
+            padding: const EdgeInsets.all(16),
+            child: TextField(
+              controller: _searchController,
+              decoration: InputDecoration(
+                hintText: '搜尋股票（代號或名稱）',
+                prefixIcon: const Icon(Icons.search),
+                suffixIcon: _searchController.text.isNotEmpty
+                    ? IconButton(
+                        icon: const Icon(Icons.clear),
+                        onPressed: () {
+                          _searchController.clear();
+                        },
+                      )
+                    : null,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                filled: true,
+                fillColor: Colors.grey[100],
+              ),
+            ),
+          ),
+
+          // TODO: 預留位置 - 未來可加入 TabBar 切換「熱門」「分類」「漲幅排行」等
+          // Example:
+          // TabBar(
+          //   tabs: [
+          //     Tab(text: '熱門'),
+          //     Tab(text: '分類'),
+          //     Tab(text: '排行'),
+          //   ],
+          // ),
+
+          // 內容區域
+          Expanded(
+            child: _isSearching
+                ? _buildSearchResults()
+                : _isLoading
+                    ? const Center(child: CircularProgressIndicator())
+                    : _buildStockList(isTablet),
           ),
         ],
       ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : _buildStockList(isTablet),
+    );
+  }
+
+  Widget _buildSearchResults() {
+    if (_searchResults.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.search_off, size: 80, color: Colors.grey[400]),
+            const SizedBox(height: 16),
+            Text(
+              '找不到「${_searchController.text}」',
+              style: TextStyle(fontSize: 18, color: Colors.grey[600]),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              '請嘗試其他關鍵字',
+              style: TextStyle(fontSize: 14, color: Colors.grey[500]),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return ListView.builder(
+      itemCount: _searchResults.length,
+      itemBuilder: (context, index) {
+        final item = _searchResults[index];
+        return ListTile(
+          leading: CircleAvatar(
+            backgroundColor: Theme.of(context).colorScheme.primary.withOpacity(0.1),
+            child: Text(
+              item.symbol.substring(0, 1),
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.primary,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+          title: Row(
+            children: [
+              Text(
+                item.symbol,
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                item.name,
+                style: const TextStyle(fontSize: 16),
+              ),
+            ],
+          ),
+          subtitle: item.category != null
+              ? Text(
+                  item.category!,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey[600],
+                  ),
+                )
+              : null,
+          trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+          onTap: () {
+            _loadAndShowStock(item.symbol);
+          },
+        );
+      },
     );
   }
 
