@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/stock.dart';
-import '../services/mock_stock_service.dart';
+import '../services/stock_service.dart';
 import '../providers/watchlist_provider.dart';
 import 'stock_detail_screen.dart';
 
@@ -13,9 +13,21 @@ class StockListScreen extends StatefulWidget {
 }
 
 class _StockListScreenState extends State<StockListScreen> {
-  final MockStockService _stockService = MockStockService();
+  final StockService _stockService = StockService();
   List<Stock> _stocks = [];
   bool _isLoading = false;
+
+  // 預設顯示的台股清單（熱門股票）
+  static const List<String> _defaultTaiwanStocks = [
+    '2330', // 台積電
+    '2317', // 鴻海
+    '2454', // 聯發科
+    '2308', // 台達電
+    '2412', // 中華電
+    '2882', // 國泰金
+    '2881', // 富邦金
+    '2303', // 聯電
+  ];
 
   @override
   void initState() {
@@ -27,14 +39,18 @@ class _StockListScreenState extends State<StockListScreen> {
     setState(() => _isLoading = true);
 
     try {
-      final stocks = await _stockService.getMockStocks();
-      setState(() {
-        _stocks = stocks;
-        _isLoading = false;
-      });
-    } catch (e) {
-      setState(() => _isLoading = false);
+      // 使用批量 API 載入台股
+      final stocks = await _stockService.getTaiwanStocks(_defaultTaiwanStocks);
+
       if (mounted) {
+        setState(() {
+          _stocks = stocks;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoading = false);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('載入股票資料失敗: $e')),
         );

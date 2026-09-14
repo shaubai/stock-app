@@ -15,6 +15,7 @@ class StockService {
   Future<Stock?> getTaiwanStock(String symbol) async {
     try {
       // 使用證交所 API
+      // ex_ch 格式：tse_代碼.tw 或 otc_代碼.tw
       final url = Uri.parse('$_twStockApiBase/getStockInfo.jsp?ex_ch=tse_$symbol.tw');
       final response = await http.get(url);
 
@@ -22,7 +23,7 @@ class StockService {
         final data = json.decode(response.body);
         if (data['msgArray'] != null && data['msgArray'].isNotEmpty) {
           final stockData = data['msgArray'][0];
-          return _parseTaiwanStock(stockData, symbol);
+          return _parseTaiwanStock(stockData);
         }
       }
       return null;
@@ -30,6 +31,33 @@ class StockService {
       // TODO: 使用 logging 框架替代 print
       // print('Error fetching Taiwan stock $symbol: $e');
       return null;
+    }
+  }
+
+  /// 批量取得台股即時報價（更有效率）
+  Future<List<Stock>> getTaiwanStocks(List<String> symbols) async {
+    if (symbols.isEmpty) return [];
+
+    try {
+      // TWSE API 支援一次查詢多支股票，用 | 分隔
+      // 例如：ex_ch=tse_2330.tw|tse_2317.tw|tse_2454.tw
+      final exChList = symbols.map((s) => 'tse_$s.tw').join('|');
+      final url = Uri.parse('$_twStockApiBase/getStockInfo.jsp?ex_ch=$exChList');
+      final response = await http.get(url);
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        if (data['msgArray'] != null) {
+          return (data['msgArray'] as List)
+              .map((stockData) => _parseTaiwanStock(stockData))
+              .toList();
+        }
+      }
+      return [];
+    } catch (e) {
+      // TODO: 使用 logging 框架替代 print
+      // print('Error fetching Taiwan stocks: $e');
+      return [];
     }
   }
 
@@ -57,13 +85,18 @@ class StockService {
   }
 
   /// 解析台股資料
-  Stock _parseTaiwanStock(Map<String, dynamic> data, String symbol) {
+  Stock _parseTaiwanStock(Map<String, dynamic> data) {
+    // 從 API 回應提取資料
+    // c: 股票代碼, n: 股票名稱, z: 成交價, y: 昨收, o: 開盤, h: 最高, l: 最低, v: 成交量(張)
+    final symbol = (data['c'] ?? '').toString();
     final currentPrice = double.tryParse(data['z'] ?? '0') ?? 0.0;
     final open = double.tryParse(data['o'] ?? '0') ?? 0.0;
     final high = double.tryParse(data['h'] ?? '0') ?? 0.0;
     final low = double.tryParse(data['l'] ?? '0') ?? 0.0;
     final previousClose = double.tryParse(data['y'] ?? '0') ?? 0.0;
-    final volume = int.tryParse(data['v'] ?? '0') ?? 0;
+    // TWSE volume 是「張」，需要 * 1000 轉成股數
+    final volumeInLots = int.tryParse(data['v'] ?? '0') ?? 0;
+    final volume = volumeInLots * 1000;
 
     final changeAmount = currentPrice - previousClose;
     final changePercent = previousClose > 0 ? (changeAmount / previousClose * 100) : 0.0;
@@ -90,9 +123,108 @@ class StockService {
     String market,
     {DateTime? startDate, DateTime? endDate}
   ) async {
-    // 實作歷史資料抓取
-    // 這裡簡化處理，實際使用時需要實作完整的歷史資料 API
+    if (market == 'TW') {
+      return _getTaiwanHistoricalData(symbol, startDate, endDate);
+    } else if (market == 'US') {
+      // TODO: 實作美股歷史資料（目前先返回空）
+      return [];
+    }
     return [];
+  }
+
+  /// 取得台股歷史資料
+  Future<List<HistoricalData>> _getTaiwanHistoricalData(
+    String symbol,
+    DateTime? startDate,
+    DateTime? endDate,
+  ) async {
+    try {
+      // 使用證交所個股日成交資訊 API
+      // 格式：https://www.twse.com.tw/rwd/zh/afterTrading/STOCK_DAY?date=YYYYMMDD&stockNo=SYMBOL&response=json
+
+      final now = DateTime.now();
+      final end = endDate ?? now;
+      final start = startDate ?? end.subtract(const Duration(days: 30));
+
+      final List<HistoricalData> allData = [];
+
+      // TWSE API 一次只能查一個月的資料
+      DateTime currentMonth = DateTime(start.year, start.month, 1);
+      final endMonth = DateTime(end.year, end.month, 1);
+
+      while (currentMonth.isBefore(endMonth) || currentMonth.isAtSameMomentAs(endMonth)) {
+        final dateStr = '${currentMonth.year}${currentMonth.month.toString().padLeft(2, '0')}01';
+        final url = Uri.parse(
+          'https://www.twse.com.tw/rwd/zh/afterTrading/STOCK_DAY?date=$dateStr&stockNo=$symbol&response=json'
+        );
+
+        final response = await http.get(url);
+
+        if (response.statusCode == 200) {
+          final data = json.decode(response.body);
+          if (data['stat'] == 'OK' && data['data'] != null) {
+            final dataList = data['data'] as List;
+            for (var item in dataList) {
+              final historicalData = _parseTaiwanHistoricalData(item as List);
+              if (historicalData != null &&
+                  !historicalData.date.isBefore(start) &&
+                  !historicalData.date.isAfter(end)) {
+                allData.add(historicalData);
+              }
+            }
+          }
+        }
+
+        // 移到下個月
+        currentMonth = DateTime(currentMonth.year, currentMonth.month + 1, 1);
+
+        // 避免過度頻繁請求
+        await Future.delayed(const Duration(milliseconds: 500));
+      }
+
+      // 按日期排序（由舊到新）
+      allData.sort((a, b) => a.date.compareTo(b.date));
+
+      return allData;
+    } catch (e) {
+      // TODO: 使用 logging 框架替代 print
+      // print('Error fetching Taiwan historical data: $e');
+      return [];
+    }
+  }
+
+  /// 解析台股歷史資料
+  HistoricalData? _parseTaiwanHistoricalData(List<dynamic> item) {
+    try {
+      // item 格式：["日期", "成交股數", "成交金額", "開盤價", "最高價", "最低價", "收盤價", "漲跌價差", "成交筆數"]
+      // 日期格式：111/01/03 (民國年/月/日)
+      final dateStr = item[0] as String;
+      final dateParts = dateStr.split('/');
+      final year = int.parse(dateParts[0]) + 1911; // 民國轉西元
+      final month = int.parse(dateParts[1]);
+      final day = int.parse(dateParts[2]);
+      final date = DateTime(year, month, day);
+
+      // 移除千分位逗號再轉換
+      final open = double.parse((item[3] as String).replaceAll(',', ''));
+      final high = double.parse((item[4] as String).replaceAll(',', ''));
+      final low = double.parse((item[5] as String).replaceAll(',', ''));
+      final close = double.parse((item[6] as String).replaceAll(',', ''));
+      final volumeStr = (item[1] as String).replaceAll(',', '');
+      final volume = int.parse(volumeStr);
+
+      return HistoricalData(
+        date: date,
+        open: open,
+        high: high,
+        low: low,
+        close: close,
+        volume: volume,
+      );
+    } catch (e) {
+      // 解析失敗，返回 null
+      return null;
+    }
   }
 
   /// 計算技術指標 - 移動平均線 (MA)

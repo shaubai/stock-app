@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/stock.dart';
 import '../models/historical_data.dart';
-import '../services/mock_stock_service.dart';
+import '../services/stock_service.dart';
 import '../providers/watchlist_provider.dart';
 import '../widgets/stock_chart.dart';
 
@@ -19,7 +19,7 @@ class StockDetailScreen extends StatefulWidget {
 }
 
 class _StockDetailScreenState extends State<StockDetailScreen> {
-  final MockStockService _stockService = MockStockService();
+  final StockService _stockService = StockService();
   List<HistoricalData> _historicalData = [];
   bool _isLoading = false;
   String _selectedPeriod = '1M'; // 1D, 5D, 1M, 3M, 1Y
@@ -35,18 +35,45 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
     setState(() => _isLoading = true);
 
     try {
-      final data = await _stockService.getMockHistoricalData(
+      // 根據選擇的時間範圍計算日期
+      final now = DateTime.now();
+      DateTime startDate;
+
+      switch (_selectedPeriod) {
+        case '5D':
+          startDate = now.subtract(const Duration(days: 7)); // 包含週末
+          break;
+        case '1M':
+          startDate = now.subtract(const Duration(days: 30));
+          break;
+        case '3M':
+          startDate = now.subtract(const Duration(days: 90));
+          break;
+        case '1Y':
+          startDate = now.subtract(const Duration(days: 365));
+          break;
+        case '1D':
+        default:
+          startDate = now.subtract(const Duration(days: 1));
+          break;
+      }
+
+      final data = await _stockService.getHistoricalData(
         widget.stock.symbol,
         widget.stock.market,
-        _selectedPeriod,
+        startDate: startDate,
+        endDate: now,
       );
-      setState(() {
-        _historicalData = data;
-        _isLoading = false;
-      });
-    } catch (e) {
-      setState(() => _isLoading = false);
+
       if (mounted) {
+        setState(() {
+          _historicalData = data;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoading = false);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('載入歷史資料失敗: $e')),
         );
