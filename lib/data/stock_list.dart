@@ -18,6 +18,18 @@ class StockListItem {
 /// Organized by market cap and liquidity
 class TaiwanStockList {
   static const List<StockListItem> stocks = [
+    // ETF - Exchange Traded Funds
+    StockListItem(symbol: '0050', name: '元大台灣50', category: 'ETF'),
+    StockListItem(symbol: '0056', name: '元大高股息', category: 'ETF'),
+    StockListItem(symbol: '006208', name: '富邦台50', category: 'ETF'),
+    StockListItem(symbol: '00878', name: '國泰永續高股息', category: 'ETF'),
+    StockListItem(symbol: '00881', name: '國泰台灣5G+', category: 'ETF'),
+    StockListItem(symbol: '00885', name: '富邦越南', category: 'ETF'),
+    StockListItem(symbol: '00692', name: '富邦公司治理', category: 'ETF'),
+    StockListItem(symbol: '00757', name: '統一FANG+', category: 'ETF'),
+    StockListItem(symbol: '00631L', name: '元大台灣50正2', category: 'ETF'),
+    StockListItem(symbol: '00632R', name: '元大台灣50反1', category: 'ETF'),
+
     // 科技股 - Technology
     StockListItem(symbol: '2330', name: '台積電', category: '半導體'),
     StockListItem(symbol: '2454', name: '聯發科', category: '半導體'),

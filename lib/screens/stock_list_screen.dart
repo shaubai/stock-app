@@ -18,8 +18,10 @@ class _StockListScreenState extends State<StockListScreen> {
   final TextEditingController _searchController = TextEditingController();
   List<Stock> _stocks = [];
   List<StockListItem> _searchResults = [];
+  Stock? _searchedStock;
   bool _isLoading = false;
   bool _isSearching = false;
+  bool _isSearchingApi = false;
 
   // 預設顯示的台股清單（熱門股票）
   static const List<String> _defaultTaiwanStocks = [
@@ -48,11 +50,35 @@ class _StockListScreenState extends State<StockListScreen> {
   }
 
   void _onSearchChanged() {
-    final query = _searchController.text;
+    final query = _searchController.text.trim();
     setState(() {
       _isSearching = query.isNotEmpty;
       _searchResults = TaiwanStockList.search(query);
+      _searchedStock = null;
     });
+
+    // 如果輸入看起來像股票代號（純數字），直接去 API 查詢
+    if (query.isNotEmpty && RegExp(r'^\d+$').hasMatch(query)) {
+      _searchStockFromApi(query);
+    }
+  }
+
+  Future<void> _searchStockFromApi(String symbol) async {
+    setState(() => _isSearchingApi = true);
+
+    try {
+      final stock = await _stockService.getTaiwanStock(symbol);
+      if (mounted && _searchController.text.trim() == symbol) {
+        setState(() {
+          _searchedStock = stock;
+          _isSearchingApi = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isSearchingApi = false);
+      }
+    }
   }
 
   Future<void> _loadStocks() async {
@@ -171,7 +197,11 @@ class _StockListScreenState extends State<StockListScreen> {
   }
 
   Widget _buildSearchResults() {
-    if (_searchResults.isEmpty) {
+    final hasApiResult = _searchedStock != null;
+    final hasSuggestions = _searchResults.isNotEmpty;
+    final showEmpty = !hasApiResult && !hasSuggestions && !_isSearchingApi;
+
+    if (showEmpty) {
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -184,7 +214,7 @@ class _StockListScreenState extends State<StockListScreen> {
             ),
             const SizedBox(height: 8),
             Text(
-              '請嘗試其他關鍵字',
+              '請嘗試輸入股票代號（如：2330）或名稱',
               style: TextStyle(fontSize: 14, color: Colors.grey[500]),
             ),
           ],
@@ -192,51 +222,143 @@ class _StockListScreenState extends State<StockListScreen> {
       );
     }
 
-    return ListView.builder(
-      itemCount: _searchResults.length,
-      itemBuilder: (context, index) {
-        final item = _searchResults[index];
-        return ListTile(
-          leading: CircleAvatar(
-            backgroundColor: Theme.of(context).colorScheme.primary.withOpacity(0.1),
-            child: Text(
-              item.symbol.substring(0, 1),
-              style: TextStyle(
-                color: Theme.of(context).colorScheme.primary,
-                fontWeight: FontWeight.bold,
-              ),
+    return ListView(
+      children: [
+        // API 查詢結果
+        if (_isSearchingApi)
+          const ListTile(
+            leading: SizedBox(
+              width: 24,
+              height: 24,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+            title: Text('查詢中...'),
+          ),
+
+        if (hasApiResult)
+          _buildStockResultTile(_searchedStock!),
+
+        // 分隔線
+        if (hasApiResult && hasSuggestions)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: Row(
+              children: [
+                Expanded(child: Divider(color: Colors.grey[300])),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Text(
+                    '搜尋建議',
+                    style: TextStyle(color: Colors.grey[600], fontSize: 12),
+                  ),
+                ),
+                Expanded(child: Divider(color: Colors.grey[300])),
+              ],
             ),
           ),
-          title: Row(
-            children: [
-              Text(
-                item.symbol,
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 16,
-                ),
-              ),
-              const SizedBox(width: 8),
-              Text(
-                item.name,
-                style: const TextStyle(fontSize: 16),
-              ),
-            ],
+
+        // 本地搜尋建議
+        ...(_searchResults.map((item) => _buildSuggestionTile(item))),
+      ],
+    );
+  }
+
+  Widget _buildStockResultTile(Stock stock) {
+    final color = stock.isPositive ? Colors.red : Colors.green;
+
+    return ListTile(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => StockDetailScreen(stock: stock),
           ),
-          subtitle: item.category != null
-              ? Text(
-                  item.category!,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.grey[600],
-                  ),
-                )
-              : null,
-          trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-          onTap: () {
-            _loadAndShowStock(item.symbol);
-          },
         );
+      },
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      tileColor: Colors.blue.withOpacity(0.05),
+      leading: Icon(Icons.show_chart, color: Colors.blue[700]),
+      title: Row(
+        children: [
+          Text(
+            stock.symbol,
+            style: const TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 16,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            stock.name,
+            style: const TextStyle(fontSize: 16),
+          ),
+        ],
+      ),
+      subtitle: Text(stock.market),
+      trailing: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          Text(
+            stock.formattedPrice,
+            style: const TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          Text(
+            stock.formattedChangePercent,
+            style: TextStyle(
+              color: color,
+              fontSize: 12,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSuggestionTile(StockListItem item) {
+    return ListTile(
+      leading: CircleAvatar(
+        backgroundColor: Theme.of(context).colorScheme.primary.withOpacity(0.1),
+        child: Text(
+          item.symbol.substring(0, 1),
+          style: TextStyle(
+            color: Theme.of(context).colorScheme.primary,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      ),
+      title: Row(
+        children: [
+          Text(
+            item.symbol,
+            style: const TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 16,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            item.name,
+            style: const TextStyle(fontSize: 16),
+          ),
+        ],
+      ),
+      subtitle: item.category != null
+          ? Text(
+              item.category!,
+              style: TextStyle(
+                fontSize: 12,
+                color: Colors.grey[600],
+              ),
+            )
+          : null,
+      trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+      onTap: () {
+        _loadAndShowStock(item.symbol);
       },
     );
   }
