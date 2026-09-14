@@ -1,9 +1,7 @@
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/stock.dart';
 import '../services/stock_service.dart';
-import '../services/mock_stock_service.dart';
 import '../providers/watchlist_provider.dart';
 import 'stock_detail_screen.dart';
 
@@ -16,7 +14,6 @@ class StockListScreen extends StatefulWidget {
 
 class _StockListScreenState extends State<StockListScreen> {
   final StockService _stockService = StockService();
-  final MockStockService _mockStockService = MockStockService();
   List<Stock> _stocks = [];
   bool _isLoading = false;
 
@@ -42,15 +39,8 @@ class _StockListScreenState extends State<StockListScreen> {
     setState(() => _isLoading = true);
 
     try {
-      List<Stock> stocks;
-
-      if (kIsWeb) {
-        // Web 平台：使用 Mock 資料（避免 CORS 問題）
-        stocks = await _mockStockService.getMockStocks();
-      } else {
-        // Mobile 平台：使用真實 API
-        stocks = await _stockService.getTaiwanStocks(_defaultTaiwanStocks);
-      }
+      // 使用真實 API（所有平台）
+      final stocks = await _stockService.getTaiwanStocks(_defaultTaiwanStocks);
 
       if (mounted) {
         setState(() {
@@ -63,11 +53,7 @@ class _StockListScreenState extends State<StockListScreen> {
         setState(() => _isLoading = false);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(
-              kIsWeb
-                  ? '載入股票資料失敗: $e（Web 版使用模擬資料）'
-                  : '載入股票資料失敗: $e',
-            ),
+            content: Text('載入股票資料失敗: $e'),
           ),
         );
       }
@@ -80,42 +66,9 @@ class _StockListScreenState extends State<StockListScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('股票看板'),
-            if (kIsWeb)
-              const Text(
-                'Web 版（模擬資料）',
-                style: TextStyle(fontSize: 12, fontWeight: FontWeight.normal),
-              ),
-          ],
-        ),
+        title: const Text('股票看板'),
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
         actions: [
-          if (kIsWeb)
-            IconButton(
-              icon: const Icon(Icons.info_outline),
-              onPressed: () {
-                showDialog(
-                  context: context,
-                  builder: (context) => AlertDialog(
-                    title: const Text('Web 版說明'),
-                    content: const Text(
-                      'Web 版本因瀏覽器 CORS 限制，目前使用模擬資料。\n\n'
-                      '若需查看即時真實資料，請使用 iOS 或 Android App。\n\n'
-                      'Mobile App 使用證交所官方 API，資料延遲約 20 秒。'
-                    ),
-                    actions: [
-                      TextButton(
-                        onPressed: () => Navigator.pop(context),
-                        child: const Text('了解'),
-                      ),
-                    ],
-                  ),
-                );
-              },
-            ),
           IconButton(
             icon: const Icon(Icons.refresh),
             onPressed: _loadStocks,

@@ -1,10 +1,8 @@
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/stock.dart';
 import '../models/historical_data.dart';
 import '../services/stock_service.dart';
-import '../services/mock_stock_service.dart';
 import '../providers/watchlist_provider.dart';
 import '../widgets/stock_chart.dart';
 
@@ -22,7 +20,6 @@ class StockDetailScreen extends StatefulWidget {
 
 class _StockDetailScreenState extends State<StockDetailScreen> {
   final StockService _stockService = StockService();
-  final MockStockService _mockStockService = MockStockService();
   List<HistoricalData> _historicalData = [];
   bool _isLoading = false;
   String _selectedPeriod = '1M'; // 1D, 5D, 1M, 3M, 1Y
@@ -38,46 +35,35 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
     setState(() => _isLoading = true);
 
     try {
-      List<HistoricalData> data;
+      // 使用真實 API（所有平台）
+      final now = DateTime.now();
+      DateTime startDate;
 
-      if (kIsWeb) {
-        // Web 平台：使用 Mock 資料（避免 CORS 問題）
-        data = await _mockStockService.getMockHistoricalData(
-          widget.stock.symbol,
-          widget.stock.market,
-          _selectedPeriod,
-        );
-      } else {
-        // Mobile 平台：使用真實 API
-        final now = DateTime.now();
-        DateTime startDate;
-
-        switch (_selectedPeriod) {
-          case '5D':
-            startDate = now.subtract(const Duration(days: 7));
-            break;
-          case '1M':
-            startDate = now.subtract(const Duration(days: 30));
-            break;
-          case '3M':
-            startDate = now.subtract(const Duration(days: 90));
-            break;
-          case '1Y':
-            startDate = now.subtract(const Duration(days: 365));
-            break;
-          case '1D':
-          default:
-            startDate = now.subtract(const Duration(days: 1));
-            break;
-        }
-
-        data = await _stockService.getHistoricalData(
-          widget.stock.symbol,
-          widget.stock.market,
-          startDate: startDate,
-          endDate: now,
-        );
+      switch (_selectedPeriod) {
+        case '5D':
+          startDate = now.subtract(const Duration(days: 7));
+          break;
+        case '1M':
+          startDate = now.subtract(const Duration(days: 30));
+          break;
+        case '3M':
+          startDate = now.subtract(const Duration(days: 90));
+          break;
+        case '1Y':
+          startDate = now.subtract(const Duration(days: 365));
+          break;
+        case '1D':
+        default:
+          startDate = now.subtract(const Duration(days: 1));
+          break;
       }
+
+      final data = await _stockService.getHistoricalData(
+        widget.stock.symbol,
+        widget.stock.market,
+        startDate: startDate,
+        endDate: now,
+      );
 
       if (mounted) {
         setState(() {
@@ -90,11 +76,7 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
         setState(() => _isLoading = false);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(
-              kIsWeb
-                  ? '載入歷史資料失敗: $e（Web 版使用模擬資料）'
-                  : '載入歷史資料失敗: $e',
-            ),
+            content: Text('載入歷史資料失敗: $e'),
           ),
         );
       }

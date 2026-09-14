@@ -1,9 +1,13 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'package:flutter/foundation.dart' show kIsWeb;
 import '../models/stock.dart';
 import '../models/historical_data.dart';
 
 class StockService {
+  // Vercel API proxy (用於 Web 平台避免 CORS 問題)
+  static const String _vercelApiBase = 'https://stock-api-one-beige.vercel.app/api';
+
   // Taiwan stock API (使用證交所公開資訊)
   static const String _twStockApiBase = 'https://mis.twse.com.tw/stock/api';
 
@@ -14,9 +18,16 @@ class StockService {
   /// 取得台股即時報價
   Future<Stock?> getTaiwanStock(String symbol) async {
     try {
-      // 使用證交所 API
-      // ex_ch 格式：tse_代碼.tw 或 otc_代碼.tw
-      final url = Uri.parse('$_twStockApiBase/getStockInfo.jsp?ex_ch=tse_$symbol.tw');
+      final Uri url;
+
+      if (kIsWeb) {
+        // Web 平台使用 Vercel API proxy 避免 CORS 問題
+        url = Uri.parse('$_vercelApiBase/stock?symbols=$symbol');
+      } else {
+        // Mobile/Desktop 平台直接使用 TWSE API
+        url = Uri.parse('$_twStockApiBase/getStockInfo.jsp?ex_ch=tse_$symbol.tw');
+      }
+
       final response = await http.get(url);
 
       if (response.statusCode == 200) {
@@ -39,10 +50,18 @@ class StockService {
     if (symbols.isEmpty) return [];
 
     try {
-      // TWSE API 支援一次查詢多支股票，用 | 分隔
-      // 例如：ex_ch=tse_2330.tw|tse_2317.tw|tse_2454.tw
-      final exChList = symbols.map((s) => 'tse_$s.tw').join('|');
-      final url = Uri.parse('$_twStockApiBase/getStockInfo.jsp?ex_ch=$exChList');
+      final Uri url;
+
+      if (kIsWeb) {
+        // Web 平台使用 Vercel API proxy 避免 CORS 問題
+        final symbolsParam = symbols.join(',');
+        url = Uri.parse('$_vercelApiBase/stock?symbols=$symbolsParam');
+      } else {
+        // Mobile/Desktop 平台直接使用 TWSE API
+        final exChList = symbols.map((s) => 'tse_$s.tw').join('|');
+        url = Uri.parse('$_twStockApiBase/getStockInfo.jsp?ex_ch=$exChList');
+      }
+
       final response = await http.get(url);
 
       if (response.statusCode == 200) {
@@ -154,9 +173,17 @@ class StockService {
 
       while (currentMonth.isBefore(endMonth) || currentMonth.isAtSameMomentAs(endMonth)) {
         final dateStr = '${currentMonth.year}${currentMonth.month.toString().padLeft(2, '0')}01';
-        final url = Uri.parse(
-          'https://www.twse.com.tw/rwd/zh/afterTrading/STOCK_DAY?date=$dateStr&stockNo=$symbol&response=json'
-        );
+
+        final Uri url;
+        if (kIsWeb) {
+          // Web 平台使用 Vercel API proxy 避免 CORS 問題
+          url = Uri.parse('$_vercelApiBase/history?symbol=$symbol&date=$dateStr');
+        } else {
+          // Mobile/Desktop 平台直接使用 TWSE API
+          url = Uri.parse(
+            'https://www.twse.com.tw/rwd/zh/afterTrading/STOCK_DAY?date=$dateStr&stockNo=$symbol&response=json'
+          );
+        }
 
         final response = await http.get(url);
 
