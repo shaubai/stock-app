@@ -1,9 +1,9 @@
-import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/stock.dart';
 import '../services/stock_service.dart';
 import '../providers/watchlist_provider.dart';
+import '../providers/stock_provider.dart';
 import '../data/stock_list.dart';
 import '../widgets/stock_tile.dart';
 import 'stock_detail_screen.dart';
@@ -18,54 +18,28 @@ class StockListScreen extends StatefulWidget {
 class _StockListScreenState extends State<StockListScreen> {
   final StockService _stockService = StockService();
   final TextEditingController _searchController = TextEditingController();
-  List<Stock> _stocks = [];
   List<StockListItem> _searchResults = [];
   Stock? _searchedStock;
-  Stock? _taiwanIndex;
-  bool _isLoading = false;
   bool _isSearching = false;
   bool _isSearchingApi = false;
-
-  // 台股加權指數代碼
-  static const String _taiwanIndexSymbol = 't00';
-
-  // 自動更新相關
-  Timer? _autoRefreshTimer;
-  DateTime? _lastUpdateTime;
-  static const Duration _refreshInterval = Duration(seconds: 30);
-
-  // 預設顯示的台股清單（熱門股票）
-  static const List<String> _defaultTaiwanStocks = [
-    '2330', // 台積電
-    '2317', // 鴻海
-    '2454', // 聯發科
-    '2308', // 台達電
-    '2412', // 中華電
-    '2882', // 國泰金
-    '2881', // 富邦金
-    '2303', // 聯電
-  ];
 
   @override
   void initState() {
     super.initState();
-    _loadStocks();
     _searchController.addListener(_onSearchChanged);
-    _startAutoRefresh();
-  }
 
-  void _startAutoRefresh() {
-    _autoRefreshTimer = Timer.periodic(_refreshInterval, (timer) {
-      // 只在不搜尋時自動刷新
-      if (!_isSearching && mounted) {
-        _loadStocks(showLoading: false); // 靜默刷新，不顯示 loading
-      }
-    });
+    // StockProvider persists across MainScreen tab switches (it isn't
+    // recreated when this screen is), so only trigger a load if it hasn't
+    // already fetched data — avoids redundant API calls on tab-switch-back.
+    final stockProvider = Provider.of<StockProvider>(context, listen: false);
+    if (stockProvider.stocks.isEmpty) {
+      stockProvider.loadStocks();
+    }
+    stockProvider.startAutoRefresh();
   }
 
   @override
   void dispose() {
-    _autoRefreshTimer?.cancel();
     _searchController.removeListener(_onSearchChanged);
     _searchController.dispose();
     super.dispose();
@@ -99,45 +73,6 @@ class _StockListScreenState extends State<StockListScreen> {
     } catch (e) {
       if (mounted) {
         setState(() => _isSearchingApi = false);
-      }
-    }
-  }
-
-  Future<void> _loadStocks({bool showLoading = true}) async {
-    if (showLoading) {
-      setState(() => _isLoading = true);
-    }
-
-    try {
-      // 使用真實 API（所有平台）
-      final results = await Future.wait([
-        _stockService.getTaiwanStocks(_defaultTaiwanStocks),
-        _stockService.getTaiwanStock(_taiwanIndexSymbol),
-      ]);
-      final stocks = results[0] as List<Stock>;
-      final taiwanIndex = results[1] as Stock?;
-
-      if (mounted) {
-        setState(() {
-          _stocks = stocks;
-          _taiwanIndex = taiwanIndex ?? _taiwanIndex;
-          _lastUpdateTime = DateTime.now();
-          if (showLoading) {
-            _isLoading = false;
-          }
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        if (showLoading) {
-          setState(() => _isLoading = false);
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('載入股票資料失敗: $e'),
-            ),
-          );
-        }
-        // 靜默刷新失敗時不顯示錯誤，避免打斷用戶
       }
     }
   }
@@ -188,80 +123,98 @@ class _StockListScreenState extends State<StockListScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text('股票看板'),
-            if (_lastUpdateTime != null)
-              Text(
-                '更新: ${_formatUpdateTime(_lastUpdateTime!)}',
-                style: const TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.normal,
+        title: Consumer<StockProvider>(
+          builder: (context, stockProvider, _) => Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('股票看板'),
+              if (stockProvider.lastUpdateTime != null)
+                Text(
+                  '更新: ${_formatUpdateTime(stockProvider.lastUpdateTime!)}',
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.normal,
+                  ),
                 ),
-              ),
-          ],
+            ],
+          ),
         ),
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
         actions: [
           if (!_isSearching)
             IconButton(
               icon: const Icon(Icons.refresh),
-              onPressed: _loadStocks,
+              onPressed: () =>
+                  Provider.of<StockProvider>(context, listen: false).loadStocks(),
               tooltip: '手動刷新',
             ),
         ],
       ),
-      body: Column(
-        children: [
-          // 大盤指數
-          if (_taiwanIndex != null) _buildIndexBar(_taiwanIndex!),
+      body: Consumer<StockProvider>(
+        builder: (context, stockProvider, _) {
+          if (stockProvider.error != null && stockProvider.stocks.isEmpty) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text(stockProvider.error!)),
+                );
+              }
+            });
+          }
 
-          // 搜尋框
-          Container(
-            padding: const EdgeInsets.all(16),
-            child: TextField(
-              controller: _searchController,
-              decoration: InputDecoration(
-                hintText: '搜尋股票（代號或名稱）',
-                prefixIcon: const Icon(Icons.search),
-                suffixIcon: _searchController.text.isNotEmpty
-                    ? IconButton(
-                        icon: const Icon(Icons.clear),
-                        onPressed: () {
-                          _searchController.clear();
-                        },
-                      )
-                    : null,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
+          return Column(
+            children: [
+              // 大盤指數
+              if (stockProvider.taiwanIndex != null)
+                _buildIndexBar(stockProvider.taiwanIndex!),
+
+              // 搜尋框
+              Container(
+                padding: const EdgeInsets.all(16),
+                child: TextField(
+                  controller: _searchController,
+                  decoration: InputDecoration(
+                    hintText: '搜尋股票（代號或名稱）',
+                    prefixIcon: const Icon(Icons.search),
+                    suffixIcon: _searchController.text.isNotEmpty
+                        ? IconButton(
+                            icon: const Icon(Icons.clear),
+                            onPressed: () {
+                              _searchController.clear();
+                            },
+                          )
+                        : null,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    filled: true,
+                    fillColor: Colors.grey[100],
+                  ),
                 ),
-                filled: true,
-                fillColor: Colors.grey[100],
               ),
-            ),
-          ),
 
-          // TODO: 預留位置 - 未來可加入 TabBar 切換「熱門」「分類」「漲幅排行」等
-          // Example:
-          // TabBar(
-          //   tabs: [
-          //     Tab(text: '熱門'),
-          //     Tab(text: '分類'),
-          //     Tab(text: '排行'),
-          //   ],
-          // ),
+              // TODO: 預留位置 - 未來可加入 TabBar 切換「熱門」「分類」「漲幅排行」等
+              // Example:
+              // TabBar(
+              //   tabs: [
+              //     Tab(text: '熱門'),
+              //     Tab(text: '分類'),
+              //     Tab(text: '排行'),
+              //   ],
+              // ),
 
-          // 內容區域
-          Expanded(
-            child: _isSearching
-                ? _buildSearchResults()
-                : _isLoading
-                    ? const Center(child: CircularProgressIndicator())
-                    : _buildStockList(isTablet),
-          ),
-        ],
+              // 內容區域
+              Expanded(
+                child: _isSearching
+                    ? _buildSearchResults()
+                    : stockProvider.isLoading
+                        ? const Center(child: CircularProgressIndicator())
+                        : _buildStockList(isTablet, stockProvider.stocks),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
@@ -480,8 +433,8 @@ class _StockListScreenState extends State<StockListScreen> {
     );
   }
 
-  Widget _buildStockList(bool isTablet) {
-    if (_stocks.isEmpty) {
+  Widget _buildStockList(bool isTablet, List<Stock> stocks) {
+    if (stocks.isEmpty) {
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -491,7 +444,8 @@ class _StockListScreenState extends State<StockListScreen> {
             const Text('尚無股票資料'),
             const SizedBox(height: 8),
             ElevatedButton(
-              onPressed: _loadStocks,
+              onPressed: () =>
+                  Provider.of<StockProvider>(context, listen: false).loadStocks(),
               child: const Text('重新載入'),
             ),
           ],
@@ -509,16 +463,16 @@ class _StockListScreenState extends State<StockListScreen> {
           crossAxisSpacing: 16,
           mainAxisSpacing: 16,
         ),
-        itemCount: _stocks.length,
-        itemBuilder: (context, index) => _buildStockTile(_stocks[index], true),
+        itemCount: stocks.length,
+        itemBuilder: (context, index) => _buildStockTile(stocks[index], true),
       );
     } else {
       // 手機：使用 List 顯示
       return ListView.separated(
         padding: const EdgeInsets.all(8),
-        itemCount: _stocks.length,
+        itemCount: stocks.length,
         separatorBuilder: (context, index) => const Divider(height: 1),
-        itemBuilder: (context, index) => _buildStockTile(_stocks[index], false),
+        itemBuilder: (context, index) => _buildStockTile(stocks[index], false),
       );
     }
   }

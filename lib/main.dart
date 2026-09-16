@@ -9,6 +9,7 @@ import 'screens/watchlist_screen.dart';
 import 'screens/login_screen.dart';
 import 'providers/watchlist_provider.dart';
 import 'providers/auth_provider.dart';
+import 'providers/stock_provider.dart';
 import 'services/storage_service_factory.dart';
 import 'services/storage_service_firestore.dart';
 import 'services/update_service.dart';
@@ -48,6 +49,7 @@ class MyApp extends StatelessWidget {
       providers: [
         ChangeNotifierProvider(create: (_) => AuthProvider()),
         ChangeNotifierProvider.value(value: watchlistProvider),
+        ChangeNotifierProvider(create: (_) => StockProvider()),
       ],
       child: MaterialApp(
         title: 'Stock App',
