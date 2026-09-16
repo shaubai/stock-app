@@ -1,3 +1,4 @@
+import 'dart:io' show Platform;
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:provider/provider.dart';
@@ -104,8 +105,10 @@ class _AuthWrapperState extends State<AuthWrapper> {
       await watchlistProvider.init();
     }
 
-    // Check for updates (only for mobile platforms, not web)
-    if (!kIsWeb) {
+    // Check for updates (Android only: downloadUrl currently points to an
+    // APK, which is meaningless on iOS/Web — iOS updates go through the
+    // App Store instead)
+    if (!kIsWeb && Platform.isAndroid) {
       _checkForUpdates();
     }
   }
