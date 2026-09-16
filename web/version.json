@@ -1,6 +1,6 @@
 {
-  "version": "1.0.1",
-  "downloadUrl": "https://github.com/shaubai/stock-app/releases/download/v1.0.1/app-release.apk",
-  "releaseNotes": "修正錯誤\n• 修正盤中股價顯示為 0 的問題（證交所 API 盤中成交價欄位解析）",
-  "forceUpdate": false
+  "version": "1.0.2",
+  "downloadUrl": "https://github.com/shaubai/stock-app/releases/download/v1.0.2/app-release.apk",
+  "releaseNotes": "修正錯誤與新功能\n• 修正 Android 開啟後畫面全白的問題\n• 修正 Google 登入後個人頁可能崩潰的問題\n• 新增台股加權指數即時顯示",
+  "forceUpdate": true
 }
