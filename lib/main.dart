@@ -208,7 +208,9 @@ class ProfileScreen extends StatelessWidget {
             radius: 50,
             backgroundColor: Theme.of(context).colorScheme.primary,
             child: Text(
-              authProvider.displayName[0].toUpperCase(),
+              authProvider.displayName.isNotEmpty
+                  ? authProvider.displayName[0].toUpperCase()
+                  : '?',
               style: const TextStyle(fontSize: 40, color: Colors.white),
             ),
           ),

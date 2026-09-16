@@ -12,7 +12,13 @@ class AuthProvider with ChangeNotifier {
   bool get isSignedIn => _user != null;
   String? get userId => _user?.uid;
   String? get userEmail => _user?.email;
-  String get displayName => _user?.displayName ?? _user?.email ?? '匿名用戶';
+  String get displayName {
+    final name = _user?.displayName;
+    if (name != null && name.isNotEmpty) return name;
+    final email = _user?.email;
+    if (email != null && email.isNotEmpty) return email;
+    return '匿名用戶';
+  }
   bool get isAnonymous => _user?.isAnonymous ?? false;
 
   AuthProvider() {
