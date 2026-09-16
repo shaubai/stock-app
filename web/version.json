@@ -1,6 +1,6 @@
 {
-  "version": "1.0.3",
-  "downloadUrl": "https://github.com/shaubai/stock-app/releases/download/v1.0.3/app-release.apk",
-  "releaseNotes": "修正錯誤\n• 修正「立即更新」按鈕在 Android 11+ 裝置上按下沒反應的問題",
+  "version": "1.0.4",
+  "downloadUrl": "https://github.com/shaubai/stock-app/releases/download/v1.0.4/app-release.apk",
+  "releaseNotes": "新增功能與優化\n• 自選股新增拖拉排序功能\n• 搜尋清單圖示改顯示市場別\n• 優化股票看板資料管理效能",
   "forceUpdate": false
 }
