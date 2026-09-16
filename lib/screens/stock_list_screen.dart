@@ -437,12 +437,14 @@ class _StockListScreenState extends State<StockListScreen> {
   Widget _buildSuggestionTile(StockListItem item) {
     return ListTile(
       leading: CircleAvatar(
+        radius: 22,
         backgroundColor: Theme.of(context).colorScheme.primary.withOpacity(0.1),
         child: Text(
-          item.symbol.substring(0, 1),
+          item.marketType.label,
           style: TextStyle(
             color: Theme.of(context).colorScheme.primary,
             fontWeight: FontWeight.bold,
+            fontSize: 11,
           ),
         ),
       ),

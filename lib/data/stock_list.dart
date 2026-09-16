@@ -2,15 +2,27 @@
 /// This file contains a curated list of popular Taiwan stocks
 /// TODO: Can be expanded to fetch full list from TWSE API
 
+/// 股票市場別（上市／上櫃／興櫃），用於搜尋建議列表的標示
+enum StockMarketType {
+  listed('上市'),
+  otc('上櫃'),
+  emerging('興櫃');
+
+  final String label;
+  const StockMarketType(this.label);
+}
+
 class StockListItem {
   final String symbol;
   final String name;
   final String? category;
+  final StockMarketType marketType;
 
   const StockListItem({
     required this.symbol,
     required this.name,
     this.category,
+    this.marketType = StockMarketType.listed,
   });
 }
 
