@@ -1,6 +1,6 @@
 {
-  "version": "1.0.2",
-  "downloadUrl": "https://github.com/shaubai/stock-app/releases/download/v1.0.2/app-release.apk",
-  "releaseNotes": "修正錯誤與新功能\n• 修正 Android 開啟後畫面全白的問題\n• 修正 Google 登入後個人頁可能崩潰的問題\n• 新增台股加權指數即時顯示",
-  "forceUpdate": true
+  "version": "1.0.3",
+  "downloadUrl": "https://github.com/shaubai/stock-app/releases/download/v1.0.3/app-release.apk",
+  "releaseNotes": "修正錯誤\n• 修正「立即更新」按鈕在 Android 11+ 裝置上按下沒反應的問題",
+  "forceUpdate": false
 }
