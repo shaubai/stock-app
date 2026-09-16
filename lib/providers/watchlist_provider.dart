@@ -7,14 +7,15 @@ import '../services/storage_service.dart';
 /// and persisting the data across app sessions using StorageService.
 class WatchlistProvider with ChangeNotifier {
   StorageService _storageService;
-  final Set<String> _watchlistSymbols = {};
+  // Ordered list, not a Set: user-defined sort order must be preserved.
+  final List<String> _watchlistSymbols = [];
   bool _isInitialized = false;
   bool _isLoading = false;
 
   WatchlistProvider(this._storageService);
 
-  /// Get a copy of the watchlist symbols
-  List<String> get watchlistSymbols => _watchlistSymbols.toList();
+  /// Get a copy of the watchlist symbols, in user-defined sort order
+  List<String> get watchlistSymbols => List.unmodifiable(_watchlistSymbols);
 
   /// Check if watchlist is initialized
   bool get isInitialized => _isInitialized;
@@ -116,6 +117,33 @@ class WatchlistProvider with ChangeNotifier {
     } else {
       await addToWatchlist(symbol);
       return true;
+    }
+  }
+
+  /// Reorder the watchlist (e.g. after a drag-and-drop in the UI)
+  ///
+  /// [oldIndex] and [newIndex] follow Flutter's ReorderableListView /
+  /// ReorderableGridView convention: newIndex is the index in the list
+  /// *before* the item at oldIndex is removed.
+  Future<void> reorder(int oldIndex, int newIndex) async {
+    if (oldIndex < newIndex) {
+      newIndex -= 1;
+    }
+    final previousOrder = List<String>.from(_watchlistSymbols);
+
+    final symbol = _watchlistSymbols.removeAt(oldIndex);
+    _watchlistSymbols.insert(newIndex, symbol);
+    notifyListeners();
+
+    try {
+      await _storageService.saveOrder(_watchlistSymbols);
+    } catch (e) {
+      debugPrint('Error saving watchlist order: $e');
+      // Revert on error
+      _watchlistSymbols
+        ..clear()
+        ..addAll(previousOrder);
+      notifyListeners();
     }
   }
 

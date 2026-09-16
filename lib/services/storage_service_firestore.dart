@@ -30,11 +30,12 @@ class StorageServiceFirestore implements StorageService {
       }
 
       // Add new watchlist items
-      for (var symbol in symbols) {
-        final docRef = _watchlistCollection.doc(symbol);
+      for (var i = 0; i < symbols.length; i++) {
+        final docRef = _watchlistCollection.doc(symbols[i]);
         batch.set(docRef, {
-          'symbol': symbol,
+          'symbol': symbols[i],
           'addedAt': FieldValue.serverTimestamp(),
+          'sortOrder': i,
         });
       }
 
@@ -47,16 +48,48 @@ class StorageServiceFirestore implements StorageService {
   @override
   Future<List<String>> loadWatchlist() async {
     try {
-      final snapshot = await _watchlistCollection
-          .orderBy('addedAt', descending: true)
-          .get();
+      // Fetch all and sort client-side rather than using orderBy('sortOrder'):
+      // Firestore's orderBy excludes documents missing that field, which
+      // would silently drop pre-existing watchlist entries created before
+      // sortOrder was introduced. Docs without sortOrder fall back to
+      // addedAt and sort after all explicitly-ordered docs.
+      final snapshot = await _watchlistCollection.get();
+      final docs = snapshot.docs.toList()
+        ..sort((a, b) {
+          final dataA = a.data() as Map<String, dynamic>;
+          final dataB = b.data() as Map<String, dynamic>;
+          final orderA = dataA['sortOrder'] as int?;
+          final orderB = dataB['sortOrder'] as int?;
+          if (orderA != null && orderB != null) return orderA.compareTo(orderB);
+          if (orderA != null) return -1;
+          if (orderB != null) return 1;
+          final addedAtA = dataA['addedAt'] as Timestamp?;
+          final addedAtB = dataB['addedAt'] as Timestamp?;
+          return (addedAtB ?? Timestamp(0, 0))
+              .compareTo(addedAtA ?? Timestamp(0, 0));
+        });
 
-      return snapshot.docs
+      return docs
           .map((doc) => doc.data() as Map<String, dynamic>)
           .map((data) => data['symbol'] as String)
           .toList();
     } catch (e) {
       throw Exception('Failed to load watchlist: $e');
+    }
+  }
+
+  @override
+  Future<void> saveOrder(List<String> orderedSymbols) async {
+    try {
+      final batch = _firestore.batch();
+      for (var i = 0; i < orderedSymbols.length; i++) {
+        batch.update(_watchlistCollection.doc(orderedSymbols[i]), {
+          'sortOrder': i,
+        });
+      }
+      await batch.commit();
+    } catch (e) {
+      throw Exception('Failed to save order: $e');
     }
   }
 
@@ -69,9 +102,17 @@ class StorageServiceFirestore implements StorageService {
         return false;
       }
 
+      final existing = await _watchlistCollection.get();
+      final maxOrder = existing.docs.fold<int>(-1, (max, d) {
+        final data = d.data() as Map<String, dynamic>;
+        final order = data['sortOrder'] as int? ?? -1;
+        return order > max ? order : max;
+      });
+
       await _watchlistCollection.doc(symbol).set({
         'symbol': symbol,
         'addedAt': FieldValue.serverTimestamp(),
+        'sortOrder': maxOrder + 1,
       });
 
       return true;

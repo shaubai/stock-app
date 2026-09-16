@@ -15,8 +15,15 @@ abstract class StorageService {
 
   /// Load the watchlist
   ///
-  /// Returns list of stock symbols, empty list if none saved
+  /// Returns list of stock symbols in user-defined sort order,
+  /// empty list if none saved
   Future<List<String>> loadWatchlist();
+
+  /// Persist a new sort order for the watchlist
+  ///
+  /// [orderedSymbols] Full list of symbols in the desired order.
+  /// Must contain exactly the same symbols currently in the watchlist.
+  Future<void> saveOrder(List<String> orderedSymbols);
 
   /// Add a symbol to the watchlist
   ///

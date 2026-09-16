@@ -11,6 +11,7 @@ class StorageServiceMobile implements StorageService {
   static const String _tableName = 'watchlist';
   static const String _columnSymbol = 'symbol';
   static const String _columnAddedAt = 'added_at';
+  static const String _columnSortOrder = 'sort_order';
 
   @override
   Future<void> init() async {
@@ -21,14 +22,35 @@ class StorageServiceMobile implements StorageService {
 
     _database = await openDatabase(
       path,
-      version: 1,
+      version: 2,
       onCreate: (db, version) async {
         await db.execute('''
           CREATE TABLE $_tableName (
             $_columnSymbol TEXT PRIMARY KEY,
-            $_columnAddedAt INTEGER NOT NULL
+            $_columnAddedAt INTEGER NOT NULL,
+            $_columnSortOrder INTEGER NOT NULL DEFAULT 0
           )
         ''');
+      },
+      onUpgrade: (db, oldVersion, newVersion) async {
+        if (oldVersion < 2) {
+          await db.execute(
+            'ALTER TABLE $_tableName ADD COLUMN $_columnSortOrder INTEGER NOT NULL DEFAULT 0',
+          );
+          // Backfill existing rows with their current added_at ordering
+          // so pre-existing watchlists keep a stable order after upgrade.
+          final rows = await db.query(_tableName, orderBy: '$_columnAddedAt DESC');
+          final batch = db.batch();
+          for (var i = 0; i < rows.length; i++) {
+            batch.update(
+              _tableName,
+              {_columnSortOrder: i},
+              where: '$_columnSymbol = ?',
+              whereArgs: [rows[i][_columnSymbol]],
+            );
+          }
+          await batch.commit(noResult: true);
+        }
       },
     );
   }
@@ -46,12 +68,13 @@ class StorageServiceMobile implements StorageService {
     final batch = _db.batch();
     final timestamp = DateTime.now().millisecondsSinceEpoch;
 
-    for (final symbol in symbols) {
+    for (var i = 0; i < symbols.length; i++) {
       batch.insert(
         _tableName,
         {
-          _columnSymbol: symbol,
+          _columnSymbol: symbols[i],
           _columnAddedAt: timestamp,
+          _columnSortOrder: i,
         },
         conflictAlgorithm: ConflictAlgorithm.replace,
       );
@@ -65,10 +88,24 @@ class StorageServiceMobile implements StorageService {
     final List<Map<String, dynamic>> maps = await _db.query(
       _tableName,
       columns: [_columnSymbol],
-      orderBy: '$_columnAddedAt DESC',
+      orderBy: '$_columnSortOrder ASC',
     );
 
     return maps.map((map) => map[_columnSymbol] as String).toList();
+  }
+
+  @override
+  Future<void> saveOrder(List<String> orderedSymbols) async {
+    final batch = _db.batch();
+    for (var i = 0; i < orderedSymbols.length; i++) {
+      batch.update(
+        _tableName,
+        {_columnSortOrder: i},
+        where: '$_columnSymbol = ?',
+        whereArgs: [orderedSymbols[i]],
+      );
+    }
+    await batch.commit(noResult: true);
   }
 
   @override
@@ -77,11 +114,15 @@ class StorageServiceMobile implements StorageService {
     if (exists) return false;
 
     try {
+      final maxOrder = Sqflite.firstIntValue(
+        await _db.rawQuery('SELECT MAX($_columnSortOrder) FROM $_tableName'),
+      );
       await _db.insert(
         _tableName,
         {
           _columnSymbol: symbol,
           _columnAddedAt: DateTime.now().millisecondsSinceEpoch,
+          _columnSortOrder: (maxOrder ?? -1) + 1,
         },
       );
       return true;

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:reorderable_grid_view/reorderable_grid_view.dart';
 import '../models/stock.dart';
 import '../services/stock_service.dart';
 import '../providers/watchlist_provider.dart';
@@ -40,11 +41,18 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
       }
 
       // 載入台股資料
+      // 不依賴 API 回傳順序，依照使用者自訂的 symbols 順序重新排列，
+      // 讓拖拉排序的 index 與畫面顯示順序保持一致
       final stocks = await _stockService.getTaiwanStocks(symbols);
+      final stocksBySymbol = {for (var s in stocks) s.symbol: s};
+      final orderedStocks = symbols
+          .map((symbol) => stocksBySymbol[symbol])
+          .whereType<Stock>()
+          .toList();
 
       if (mounted) {
         setState(() {
-          _stocks = stocks;
+          _stocks = orderedStocks;
           _isLoading = false;
         });
       }
@@ -133,7 +141,7 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
     }
 
     if (isTablet) {
-      return GridView.builder(
+      return ReorderableGridView.builder(
         padding: const EdgeInsets.all(16),
         gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
           crossAxisCount: 2,
@@ -142,16 +150,38 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
           mainAxisSpacing: 16,
         ),
         itemCount: _stocks.length,
-        itemBuilder: (context, index) => _buildStockTile(_stocks[index], true),
+        itemBuilder: (context, index) => KeyedSubtree(
+          key: ValueKey(_stocks[index].symbol),
+          child: _buildStockTile(_stocks[index], true),
+        ),
+        onReorder: _handleReorder,
       );
     } else {
-      return ListView.separated(
+      return ReorderableListView.builder(
         padding: const EdgeInsets.all(8),
         itemCount: _stocks.length,
-        separatorBuilder: (context, index) => const Divider(height: 1),
-        itemBuilder: (context, index) => _buildStockTile(_stocks[index], false),
+        itemBuilder: (context, index) => Container(
+          key: ValueKey(_stocks[index].symbol),
+          decoration: const BoxDecoration(
+            border: Border(bottom: BorderSide(color: Colors.black12)),
+          ),
+          child: _buildStockTile(_stocks[index], false),
+        ),
+        onReorder: _handleReorder,
       );
     }
+  }
+
+  Future<void> _handleReorder(int oldIndex, int newIndex) async {
+    final watchlistProvider = Provider.of<WatchlistProvider>(context, listen: false);
+
+    setState(() {
+      final adjustedNewIndex = oldIndex < newIndex ? newIndex - 1 : newIndex;
+      final stock = _stocks.removeAt(oldIndex);
+      _stocks.insert(adjustedNewIndex, stock);
+    });
+
+    await watchlistProvider.reorder(oldIndex, newIndex);
   }
 
   Widget _buildStockTile(Stock stock, bool isTablet) {

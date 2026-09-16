@@ -64,6 +64,7 @@ dependencies:
   # App version and update check
   package_info_plus: ^8.1.2
   url_launcher: ^6.3.1
+  reorderable_grid_view: ^2.2.8
 
 dev_dependencies:
   flutter_test:

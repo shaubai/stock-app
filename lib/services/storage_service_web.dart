@@ -33,6 +33,11 @@ class StorageServiceWeb implements StorageService {
   }
 
   @override
+  Future<void> saveOrder(List<String> orderedSymbols) async {
+    await saveWatchlist(orderedSymbols);
+  }
+
+  @override
   Future<bool> addToWatchlist(String symbol) async {
     final watchlist = await loadWatchlist();
 
