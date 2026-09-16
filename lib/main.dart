@@ -17,9 +17,18 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   // Initialize Firebase
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
+  // 在 Android/iOS，若有 google-services.json / GoogleService-Info.plist，
+  // native 層會在 main() 執行前自動建立 [DEFAULT] app，導致 Dart 端再次呼叫
+  // initializeApp() 時丟出 [core/duplicate-app]。Firebase.apps 在此情境下
+  // 不一定會同步反映 native 端已存在的 app，因此改以 catch 例外的方式忽略，
+  // 避免例外未被攔截導致 App 啟動失敗（畫面全白）
+  try {
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+  } on FirebaseException catch (e) {
+    if (e.code != 'duplicate-app') rethrow;
+  }
 
   // Initialize with local storage first (will switch to Firestore after login)
   final watchlistProvider = WatchlistProvider(createStorageService());
