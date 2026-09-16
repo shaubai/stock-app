@@ -20,9 +20,13 @@ class _StockListScreenState extends State<StockListScreen> {
   List<Stock> _stocks = [];
   List<StockListItem> _searchResults = [];
   Stock? _searchedStock;
+  Stock? _taiwanIndex;
   bool _isLoading = false;
   bool _isSearching = false;
   bool _isSearchingApi = false;
+
+  // 台股加權指數代碼
+  static const String _taiwanIndexSymbol = 't00';
 
   // 自動更新相關
   Timer? _autoRefreshTimer;
@@ -105,11 +109,17 @@ class _StockListScreenState extends State<StockListScreen> {
 
     try {
       // 使用真實 API（所有平台）
-      final stocks = await _stockService.getTaiwanStocks(_defaultTaiwanStocks);
+      final results = await Future.wait([
+        _stockService.getTaiwanStocks(_defaultTaiwanStocks),
+        _stockService.getTaiwanStock(_taiwanIndexSymbol),
+      ]);
+      final stocks = results[0] as List<Stock>;
+      final taiwanIndex = results[1] as Stock?;
 
       if (mounted) {
         setState(() {
           _stocks = stocks;
+          _taiwanIndex = taiwanIndex ?? _taiwanIndex;
           _lastUpdateTime = DateTime.now();
           if (showLoading) {
             _isLoading = false;
@@ -204,6 +214,9 @@ class _StockListScreenState extends State<StockListScreen> {
       ),
       body: Column(
         children: [
+          // 大盤指數
+          if (_taiwanIndex != null) _buildIndexBar(_taiwanIndex!),
+
           // 搜尋框
           Container(
             padding: const EdgeInsets.all(16),
@@ -246,6 +259,51 @@ class _StockListScreenState extends State<StockListScreen> {
                 : _isLoading
                     ? const Center(child: CircularProgressIndicator())
                     : _buildStockList(isTablet),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildIndexBar(Stock index) {
+    final color = index.isPositive ? Colors.red : Colors.green;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      color: color.withAlpha((255 * 0.08).round()),
+      child: Row(
+        children: [
+          Icon(Icons.equalizer, size: 18, color: color),
+          const SizedBox(width: 8),
+          Text(
+            '加權指數',
+            style: TextStyle(
+              fontSize: 13,
+              color: Colors.grey[700],
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            index.currentPrice.toStringAsFixed(2),
+            style: const TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Icon(
+            index.isPositive ? Icons.arrow_drop_up : Icons.arrow_drop_down,
+            color: color,
+            size: 18,
+          ),
+          Text(
+            '${index.formattedChange} (${index.formattedChangePercent})',
+            style: TextStyle(
+              fontSize: 13,
+              color: color,
+              fontWeight: FontWeight.bold,
+            ),
           ),
         ],
       ),
