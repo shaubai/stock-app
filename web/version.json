@@ -1,6 +1,6 @@
 {
-  "version": "1.0.0",
-  "downloadUrl": "https://github.com/shaubai/stock-app/releases/download/v1.0.0/stock-app-v1.0.0.apk",
-  "releaseNotes": "初始版本\n• 台股即時報價\n• 股價自動刷新（每30秒）\n• 搜尋任意台股代號\n• Firebase 登入與雲端同步自選股\n• 股票詳細資訊與歷史圖表",
+  "version": "1.0.1",
+  "downloadUrl": "https://github.com/shaubai/stock-app/releases/download/v1.0.1/app-release.apk",
+  "releaseNotes": "修正錯誤\n• 修正盤中股價顯示為 0 的問題（證交所 API 盤中成交價欄位解析）",
   "forceUpdate": false
 }

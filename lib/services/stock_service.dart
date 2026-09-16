@@ -108,11 +108,16 @@ class StockService {
     // 從 API 回應提取資料
     // c: 股票代碼, n: 股票名稱, z: 成交價, y: 昨收, o: 開盤, h: 最高, l: 最低, v: 成交量(張)
     final symbol = (data['c'] ?? '').toString();
-    final currentPrice = double.tryParse(data['z'] ?? '0') ?? 0.0;
     final open = double.tryParse(data['o'] ?? '0') ?? 0.0;
     final high = double.tryParse(data['h'] ?? '0') ?? 0.0;
     final low = double.tryParse(data['l'] ?? '0') ?? 0.0;
     final previousClose = double.tryParse(data['y'] ?? '0') ?? 0.0;
+    // 盤中最新成交價常以 "-" 出現在外層 z，實際成交價在巢狀 trade.z 中
+    // 兩者皆無成交時（如剛開盤、當天無量）才 fallback 用昨收價
+    final tradeData = data['trade'] as Map<String, dynamic>?;
+    final currentPrice = double.tryParse(data['z'] ?? '') ??
+        double.tryParse(tradeData?['z'] ?? '') ??
+        previousClose;
     // TWSE volume 是「張」，需要 * 1000 轉成股數
     final volumeInLots = int.tryParse(data['v'] ?? '0') ?? 0;
     final volume = volumeInLots * 1000;
