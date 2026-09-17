@@ -1,6 +1,6 @@
 {
-  "version": "1.0.5",
-  "downloadUrl": "https://github.com/shaubai/stock-app/releases/download/v1.0.5/app-release.apk",
-  "releaseNotes": "優化\n• 股票資料 API 請求新增自動重試機制，提升資料載入穩定性",
+  "version": "1.0.6",
+  "downloadUrl": "https://github.com/shaubai/stock-app/releases/download/v1.0.6/app-release.apk",
+  "releaseNotes": "新增功能與優化\n• 股票詳情頁新增技術指標：RSI、MACD、KD\n• 股票資料 API 請求新增自動重試機制",
   "forceUpdate": false
 }
