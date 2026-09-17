@@ -148,6 +148,25 @@ class _AuthWrapperState extends State<AuthWrapper> {
   }
 }
 
+/// 決定 MainScreen 開啟時該停在哪個分頁（0=股票看板, 1=自選股）。
+///
+/// 回傳 null 表示這次不該有任何變動（尚未初始化，或已經判斷過一次）；
+/// 只在 [isInitialized] 剛變成 true、且 [hasSetInitialTab] 仍是 false 時
+/// 才會回傳非 null 值，且僅回傳一次——之後使用者手動切分頁或自選股
+/// 數量變動，都不應該再被自動跳轉打斷。
+///
+/// 抽成獨立的純函式（不依賴 State/BuildContext）方便直接單元測試，
+/// 不需要渲染 MainScreen 底下會發出真實網路請求的 StockListScreen /
+/// WatchlistScreen。
+int? resolveInitialTabIndex({
+  required bool hasSetInitialTab,
+  required bool isInitialized,
+  required int watchlistCount,
+}) {
+  if (hasSetInitialTab || !isInitialized) return null;
+  return watchlistCount > 0 ? 1 : 0;
+}
+
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
 
@@ -158,14 +177,40 @@ class MainScreen extends StatefulWidget {
 class _MainScreenState extends State<MainScreen> {
   int _currentIndex = 0;
 
+  // WatchlistProvider 的資料是非同步載入的（見 AuthWrapper._initializeAuth
+  // 對 watchlistProvider.init() 的 await），MainScreen build() 當下不保證
+  // 已經載入完成，因此不能只在 initState 判斷一次 count。改為監聽
+  // isInitialized 由 false 變 true 的那一刻才決定初始分頁，且只做一次——
+  // 之後使用者手動切分頁或自選股數量變動，都不應該再被自動跳轉打斷。
+  bool _hasSetInitialTab = false;
+
   final List<Widget> _screens = const [
     StockListScreen(),
     WatchlistScreen(),
     ProfileScreen(),
   ];
 
+  void _maybeSetInitialTab(WatchlistProvider watchlistProvider) {
+    final newIndex = resolveInitialTabIndex(
+      hasSetInitialTab: _hasSetInitialTab,
+      isInitialized: watchlistProvider.isInitialized,
+      watchlistCount: watchlistProvider.count,
+    );
+    if (newIndex == null) return;
+    _hasSetInitialTab = true;
+    if (newIndex != _currentIndex) {
+      // 用 microtask 避免在 build 過程中呼叫 setState
+      Future.microtask(() {
+        if (mounted) setState(() => _currentIndex = newIndex);
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final watchlistProvider = Provider.of<WatchlistProvider>(context);
+    _maybeSetInitialTab(watchlistProvider);
+
     return Scaffold(
       body: _screens[_currentIndex],
       bottomNavigationBar: BottomNavigationBar(
