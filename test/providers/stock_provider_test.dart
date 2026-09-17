@@ -27,6 +27,30 @@ void main() {
     return StockService(httpClient: HttpRetryClient(client: client, delay: (_) async {}));
   }
 
+  /// Builds a StockService where id-list and quote requests are routed to
+  /// different canned responses based on the request path, so tests can
+  /// verify loadStocks actually uses the id-list symbols it's given.
+  StockService serviceWithIdList(
+    List<String> idList,
+    List<Map<String, String>> stockFields,
+  ) {
+    final client = MockClient((request) async {
+      if (request.url.path.endsWith('/id-list')) {
+        return http.Response(
+          jsonEncode({'idList': idList, 'cached': true, 'updatedAt': 0}),
+          200,
+          headers: {'content-type': 'application/json; charset=utf-8'},
+        );
+      }
+      return http.Response(
+        jsonEncode({'msgArray': stockFields}),
+        200,
+        headers: {'content-type': 'application/json; charset=utf-8'},
+      );
+    });
+    return StockService(httpClient: HttpRetryClient(client: client, delay: (_) async {}));
+  }
+
   Map<String, String> stockField(String symbol, {String price = '100.0'}) => {
         'c': symbol,
         'n': symbol,
@@ -131,6 +155,100 @@ void main() {
       await provider.loadStocks();
 
       expect(notifyCount, greaterThanOrEqualTo(1));
+    });
+
+    test('uses the remote id-list symbols when available, not the built-in default list', () async {
+      // Only '9999' is "known" to this mock quote endpoint; if loadStocks
+      // ignored the id-list and queried defaultTaiwanStocks instead, this
+      // symbol wouldn't be requested and the assertion below would fail.
+      final service = serviceWithIdList(['9999'], [stockField('9999', price: '42.0')]);
+      final provider = StockProvider(stockService: service);
+
+      await provider.loadStocks();
+
+      expect(provider.stocks.map((s) => s.symbol), ['9999']);
+    });
+
+    test('falls back to defaultTaiwanStocks when id-list is unavailable (e.g. 404, not yet deployed)', () async {
+      final client = MockClient((request) async {
+        if (request.url.path.endsWith('/id-list')) {
+          return http.Response('Not Found', 404);
+        }
+        return http.Response(
+          jsonEncode({'msgArray': [stockField('2330')]}),
+          200,
+          headers: {'content-type': 'application/json; charset=utf-8'},
+        );
+      });
+      final service = StockService(httpClient: HttpRetryClient(client: client, delay: (_) async {}));
+      final provider = StockProvider(stockService: service);
+
+      await provider.loadStocks();
+
+      // The mocked quote endpoint ignores which symbols were requested and
+      // always returns this one stock — so a non-empty result here confirms
+      // loadStocks proceeded to fetch quotes using the fallback list rather
+      // than stalling out when getIdList() returns null.
+      expect(provider.stocks, isNotEmpty);
+      expect(provider.error, isNull);
+    });
+
+    test('caches the id-list within a session: a second loadStocks call does not re-fetch it', () async {
+      var idListRequestCount = 0;
+      final client = MockClient((request) async {
+        if (request.url.path.endsWith('/id-list')) {
+          idListRequestCount++;
+          return http.Response(
+            jsonEncode({'idList': ['9999'], 'cached': true, 'updatedAt': 0}),
+            200,
+            headers: {'content-type': 'application/json; charset=utf-8'},
+          );
+        }
+        return http.Response(
+          jsonEncode({'msgArray': [stockField('9999')]}),
+          200,
+          headers: {'content-type': 'application/json; charset=utf-8'},
+        );
+      });
+      final service = StockService(httpClient: HttpRetryClient(client: client, delay: (_) async {}));
+      final provider = StockProvider(stockService: service);
+
+      await provider.loadStocks();
+      await provider.loadStocks(showLoading: false); // simulates the 30s auto-refresh tick
+
+      expect(idListRequestCount, 1,
+          reason: 'id-list changes once a day server-side; the 30s quote refresh should reuse the cached list');
+    });
+
+    test('retries fetching id-list on the next loadStocks call if the first attempt failed', () async {
+      var idListRequestCount = 0;
+      final client = MockClient((request) async {
+        if (request.url.path.endsWith('/id-list')) {
+          idListRequestCount++;
+          // First attempt fails (e.g. transient network error), second succeeds.
+          if (idListRequestCount == 1) {
+            return http.Response('Server Error', 500);
+          }
+          return http.Response(
+            jsonEncode({'idList': ['9999'], 'cached': true, 'updatedAt': 0}),
+            200,
+            headers: {'content-type': 'application/json; charset=utf-8'},
+          );
+        }
+        return http.Response(
+          jsonEncode({'msgArray': [stockField('9999')]}),
+          200,
+          headers: {'content-type': 'application/json; charset=utf-8'},
+        );
+      });
+      final service = StockService(httpClient: HttpRetryClient(client: client, delay: (_) async {}));
+      final provider = StockProvider(stockService: service);
+
+      await provider.loadStocks(); // id-list fetch fails, falls back to defaultTaiwanStocks
+      await provider.loadStocks(showLoading: false); // should retry, not stay stuck on the fallback
+
+      expect(provider.stocks.map((s) => s.symbol), ['9999'],
+          reason: 'a failed id-list fetch must not be cached — the next call should retry it');
     });
   });
 

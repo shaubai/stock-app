@@ -163,4 +163,34 @@ void main() {
       expect(requestMade, isFalse);
     });
   });
+
+  group('StockService.getIdList', () {
+    test('parses idList from a successful response', () async {
+      final service = serviceReturning(jsonEncode({
+        'idList': ['2330', '2317', '2454'],
+        'cached': true,
+        'updatedAt': 1234567890000,
+      }));
+
+      final idList = await service.getIdList();
+
+      expect(idList, ['2330', '2317', '2454']);
+    });
+
+    test('returns null when idList field is missing', () async {
+      final service = serviceReturning(jsonEncode({'error': 'not ready'}));
+
+      final idList = await service.getIdList();
+
+      expect(idList, isNull);
+    });
+
+    test('returns null on non-200 response (e.g. endpoint not deployed yet)', () async {
+      final service = serviceReturning('Not Found', statusCode: 404);
+
+      final idList = await service.getIdList();
+
+      expect(idList, isNull);
+    });
+  });
 }

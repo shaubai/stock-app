@@ -85,6 +85,31 @@ class StockService {
     }
   }
 
+  /// 取得股票代碼清單（來自 stock-api 的 Firestore 快取，每日更新）
+  ///
+  /// 不分平台一律走 Vercel API——這份清單只存在於 stock-api，沒有
+  /// 對應的證交所直接查詢端點可用。呼叫端失敗時應 fallback 回內建的
+  /// 預設清單，避免此服務中斷影響股票看板顯示。
+  Future<List<String>?> getIdList() async {
+    try {
+      final url = Uri.parse('$_vercelApiBase/id-list');
+      final response = await _httpClient.get(url);
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        final idList = data['idList'] as List?;
+        if (idList != null) {
+          return idList.map((id) => id.toString()).toList();
+        }
+      }
+      return null;
+    } catch (e) {
+      // TODO: 使用 logging 框架替代 print
+      // print('Error fetching id list: $e');
+      return null;
+    }
+  }
+
   /// 取得美股即時報價
   Future<Stock?> getUSStock(String symbol) async {
     try {

@@ -17,6 +17,8 @@ class StockProvider with ChangeNotifier {
   static const Duration _refreshInterval = Duration(seconds: 30);
 
   // 預設顯示的台股清單（熱門股票）
+  // 做為 id-list（見 loadStocks）無法取得時的 fallback，確保股票看板
+  // 不會因遠端清單服務中斷而空白
   static const List<String> defaultTaiwanStocks = [
     '2330', // 台積電
     '2317', // 鴻海
@@ -34,6 +36,13 @@ class StockProvider with ChangeNotifier {
   String? _error;
   DateTime? _lastUpdateTime;
   Timer? _autoRefreshTimer;
+
+  // 本次 App session 快取的遠端股票代碼清單。id-list 一天只由 server
+  // 端更新一次（見 stock-api 的 cron job），沒必要跟著 30 秒的自動
+  // 報價刷新一起重打；成功拿到一次後，本次 session 就重複使用。
+  // 若啟動時取得失敗，維持 null，讓後續每次 loadStocks 繼續嘗試——
+  // 避免單純的暫時性網路錯誤讓整個 session 卡死在 fallback 清單。
+  List<String>? _cachedIdList;
 
   StockProvider({StockService? stockService})
       : _stockService = stockService ?? StockService();
@@ -69,8 +78,20 @@ class StockProvider with ChangeNotifier {
     }
 
     try {
+      // 股票看板清單優先使用 stock-api 的遠端 id-list（每日更新的完整
+      // 代碼清單），本次 session 內快取重用（見 _cachedIdList）；取得
+      // 失敗（服務未部署、網路錯誤等）時 fallback 回內建的固定熱門股
+      // 清單，確保看板不會空白
+      if (_cachedIdList == null) {
+        final remoteIdList = await _stockService.getIdList();
+        if (remoteIdList != null && remoteIdList.isNotEmpty) {
+          _cachedIdList = remoteIdList;
+        }
+      }
+      final symbols = _cachedIdList ?? defaultTaiwanStocks;
+
       final results = await Future.wait([
-        _stockService.getTaiwanStocks(defaultTaiwanStocks),
+        _stockService.getTaiwanStocks(symbols),
         _stockService.getTaiwanStock(_taiwanIndexSymbol),
       ]);
       _stocks = results[0] as List<Stock>;
