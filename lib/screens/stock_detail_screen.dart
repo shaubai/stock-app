@@ -5,6 +5,7 @@ import '../models/historical_data.dart';
 import '../services/stock_service.dart';
 import '../providers/watchlist_provider.dart';
 import '../widgets/stock_chart.dart';
+import '../widgets/indicator_chart.dart';
 
 class StockDetailScreen extends StatefulWidget {
   final Stock stock;
@@ -24,6 +25,25 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
   bool _isLoading = false;
   String _selectedPeriod = '1M'; // 1D, 5D, 1M, 3M, 1Y
   bool _showMA = false;
+
+  // 震盪指標（RSI/MACD/KD）選中狀態。用 Set 而非單一 nullable 值儲存，
+  // 讓目前的單選 UI 互動（見 _toggleIndicator）未來要開放多選時，
+  // 只需改互動方式，不必更動狀態或子圖表渲染邏輯（渲染端本就是逐一
+  // 迭代 Set 內容畫出對應子圖表，天生支援畫多個）。
+  final Set<IndicatorType> _selectedIndicators = {};
+
+  void _toggleIndicator(IndicatorType type) {
+    setState(() {
+      if (_selectedIndicators.contains(type)) {
+        _selectedIndicators.remove(type);
+      } else {
+        // 目前 UI 限制一次只顯示一個震盪指標子圖表，避免畫面過長；
+        // 之後要開放多選只需拿掉這行 clear()。
+        _selectedIndicators.clear();
+        _selectedIndicators.add(type);
+      }
+    });
+  }
 
   @override
   void initState() {
@@ -150,14 +170,27 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
                 ? const Center(child: CircularProgressIndicator())
                 : _historicalData.isEmpty
                     ? const Center(child: Text('暫無歷史資料'))
-                    : StockChart(
-                        data: _historicalData,
-                        showMA: _showMA,
-                        maPeriods: const [5, 10, 20],
+                    : SingleChildScrollView(
+                        child: Column(
+                          children: [
+                            SizedBox(
+                              height: 320,
+                              child: StockChart(
+                                data: _historicalData,
+                                showMA: _showMA,
+                                maPeriods: const [5, 10, 20],
+                              ),
+                            ),
+                            // 震盪指標子圖表：逐一渲染 _selectedIndicators
+                            // 內的每個類型，天生支援未來開放多選同時顯示
+                            for (final type in _selectedIndicators)
+                              IndicatorChart(type: type, data: _historicalData),
+                          ],
+                        ),
                       ),
           ),
 
-          // MA 指標開關
+          // 技術指標開關
           if (!_isLoading && _historicalData.isNotEmpty)
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -167,13 +200,15 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
                   bottom: BorderSide(color: Colors.grey.shade300),
                 ),
               ),
-              child: Row(
+              child: Wrap(
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: 8,
+                runSpacing: 8,
                 children: [
                   const Text(
                     '技術指標：',
                     style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
                   ),
-                  const SizedBox(width: 8),
                   FilterChip(
                     label: const Text('MA (5,10,20)'),
                     selected: _showMA,
@@ -181,6 +216,12 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
                       setState(() => _showMA = selected);
                     },
                   ),
+                  for (final type in IndicatorType.values)
+                    FilterChip(
+                      label: Text(type.label),
+                      selected: _selectedIndicators.contains(type),
+                      onSelected: (_) => _toggleIndicator(type),
+                    ),
                 ],
               ),
             ),
