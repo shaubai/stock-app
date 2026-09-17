@@ -15,7 +15,10 @@ class StockService {
   // 注意：實際使用時可能需要申請 API key
   static const String _usStockApiBase = 'https://query1.finance.yahoo.com/v8/finance';
 
-  final HttpRetryClient _httpClient = HttpRetryClient();
+  final HttpRetryClient _httpClient;
+
+  StockService({HttpRetryClient? httpClient})
+      : _httpClient = httpClient ?? HttpRetryClient();
 
   /// 取得台股即時報價
   Future<Stock?> getTaiwanStock(String symbol) async {

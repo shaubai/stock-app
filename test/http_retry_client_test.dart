@@ -111,9 +111,7 @@ void main() {
     });
 
     test('uses exponential backoff without Retry-After', () async {
-      var callCount = 0;
       final client = MockClient((request) async {
-        callCount++;
         return http.Response('unavailable', 503);
       });
 

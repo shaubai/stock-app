@@ -2,17 +2,32 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:flutter/foundation.dart';
 
-class AuthService {
+/// The subset of AuthService that AuthProvider depends on.
+///
+/// Exists so AuthProvider can be constructed with a fake implementation in
+/// tests, instead of always going through real Firebase/Google Sign-In.
+abstract class AuthServiceBase {
+  User? get currentUser;
+  Stream<User?> get authStateChanges;
+  Future<UserCredential?> signInWithGoogle();
+  Future<UserCredential?> signInAnonymously();
+  Future<void> signOut();
+}
+
+class AuthService implements AuthServiceBase {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final GoogleSignIn _googleSignIn = GoogleSignIn();
 
   /// Get current user
+  @override
   User? get currentUser => _auth.currentUser;
 
   /// Stream of auth state changes
+  @override
   Stream<User?> get authStateChanges => _auth.authStateChanges();
 
   /// Sign in with Google
+  @override
   Future<UserCredential?> signInWithGoogle() async {
     try {
       if (kIsWeb) {
@@ -44,6 +59,7 @@ class AuthService {
   }
 
   /// Sign in anonymously
+  @override
   Future<UserCredential?> signInAnonymously() async {
     try {
       return await _auth.signInAnonymously();
@@ -54,6 +70,7 @@ class AuthService {
   }
 
   /// Sign out
+  @override
   Future<void> signOut() async {
     try {
       if (!kIsWeb) {
