@@ -27,20 +27,35 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
   bool _showMA = false;
 
   // 震盪指標（RSI/MACD/KD）選中狀態。用 Set 而非單一 nullable 值儲存，
-  // 讓目前的單選 UI 互動（見 _toggleIndicator）未來要開放多選時，
-  // 只需改互動方式，不必更動狀態或子圖表渲染邏輯（渲染端本就是逐一
-  // 迭代 Set 內容畫出對應子圖表，天生支援畫多個）。
+  // 即使目前 UI 與渲染都只處理單一選取（見下方圖表區的
+  // `_selectedIndicators.first`），未來若要開放多選同時顯示，資料結構
+  // 不用換，只是「取第一個」要改成「逐一渲染全部」。
   final Set<IndicatorType> _selectedIndicators = {};
+
+  // MA 疊加線與 RSI/MACD/KD 互斥：兩者共用同一塊固定高度的圖表區域，
+  // 選了震盪指標時股價圖（連同 MA 疊加線）整個被置換掉，MA 開關若仍
+  // 顯示選中會與畫面實際內容矛盾（2026/09/17 使用者回報：MA 和 MACD
+  // 同時打勾，但畫面只顯示 MACD）。因此選其中一種時自動清掉另一種。
 
   void _toggleIndicator(IndicatorType type) {
     setState(() {
       if (_selectedIndicators.contains(type)) {
         _selectedIndicators.remove(type);
       } else {
-        // 目前 UI 限制一次只顯示一個震盪指標子圖表，避免畫面過長；
-        // 之後要開放多選只需拿掉這行 clear()。
+        _showMA = false;
+        // 目前一次只顯示一個震盪指標（用置換主圖表區域的方式呈現，
+        // 而非堆疊捲動），選新的會自動取代舊的。
         _selectedIndicators.clear();
         _selectedIndicators.add(type);
+      }
+    });
+  }
+
+  void _toggleMA(bool selected) {
+    setState(() {
+      _showMA = selected;
+      if (selected) {
+        _selectedIndicators.clear();
       }
     });
   }
@@ -156,78 +171,100 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
           ),
         ],
       ),
-      body: Column(
-        children: [
-          // 價格資訊區
-          _buildPriceSection(color),
-
-          // 時間範圍選擇
-          _buildPeriodSelector(),
-
-          // 圖表區
-          Expanded(
-            child: _isLoading
-                ? const Center(child: CircularProgressIndicator())
-                : _historicalData.isEmpty
-                    ? const Center(child: Text('暫無歷史資料'))
-                    : SingleChildScrollView(
-                        child: Column(
-                          children: [
-                            SizedBox(
-                              height: 320,
-                              child: StockChart(
-                                data: _historicalData,
-                                showMA: _showMA,
-                                maPeriods: const [5, 10, 20],
-                              ),
-                            ),
-                            // 震盪指標子圖表：逐一渲染 _selectedIndicators
-                            // 內的每個類型，天生支援未來開放多選同時顯示
-                            for (final type in _selectedIndicators)
-                              IndicatorChart(type: type, data: _historicalData),
-                          ],
-                        ),
-                      ),
-          ),
-
-          // 技術指標開關
-          if (!_isLoading && _historicalData.isNotEmpty)
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              decoration: BoxDecoration(
-                border: Border(
-                  top: BorderSide(color: Colors.grey.shade300),
-                  bottom: BorderSide(color: Colors.grey.shade300),
-                ),
-              ),
-              child: Wrap(
-                crossAxisAlignment: WrapCrossAlignment.center,
-                spacing: 8,
-                runSpacing: 8,
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : SingleChildScrollView(
+              child: Column(
                 children: [
-                  const Text(
-                    '技術指標：',
-                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
-                  ),
-                  FilterChip(
-                    label: const Text('MA (5,10,20)'),
-                    selected: _showMA,
-                    onSelected: (selected) {
-                      setState(() => _showMA = selected);
-                    },
-                  ),
-                  for (final type in IndicatorType.values)
-                    FilterChip(
-                      label: Text(type.label),
-                      selected: _selectedIndicators.contains(type),
-                      onSelected: (_) => _toggleIndicator(type),
+                  // 價格資訊區
+                  _buildPriceSection(color),
+
+                  // 時間範圍選擇
+                  _buildPeriodSelector(),
+
+                  if (_historicalData.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.all(32),
+                      child: Center(child: Text('暫無歷史資料')),
+                    )
+                  else ...[
+                    // 技術指標開關：放在圖表正上方
+                    _buildIndicatorSelector(),
+
+                    // 圖表區：未選震盪指標時顯示股價折線圖（含 MA 疊加
+                    // 線），選了 RSI/MACD/KD 其中之一時在同一個固定區域
+                    // 置換成該指標子圖表，選擇後立即可見、不需捲動。
+                    //
+                    // 目前 UI 限制一次只選一個震盪指標，因此固定區域
+                    // 只需容納單一圖表；若未來開放多選同時顯示，這裡
+                    // 會需要改回可捲動堆疊多個子圖表，屆時再處理。
+                    SizedBox(
+                      height: 240,
+                      child: _selectedIndicators.isEmpty
+                          ? StockChart(
+                              data: _historicalData,
+                              showMA: _showMA,
+                              maPeriods: const [5, 10, 20],
+                            )
+                          : IndicatorChart(
+                              type: _selectedIndicators.first,
+                              data: _historicalData,
+                            ),
                     ),
+
+                    // 成交量圖：獨立於股價／技術指標置換區域之外，
+                    // 不受技術指標切換影響，永遠顯示在圖表區下方。
+                    SizedBox(
+                      height: 80,
+                      child: VolumeChart(data: _historicalData),
+                    ),
+                  ],
+
+                  // 詳細資料區
+                  _buildDetailsSection(),
                 ],
               ),
             ),
+    );
+  }
 
-          // 詳細資料區
-          _buildDetailsSection(),
+  Widget _buildIndicatorSelector() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      decoration: BoxDecoration(
+        border: Border(
+          top: BorderSide(color: Colors.grey.shade300),
+          bottom: BorderSide(color: Colors.grey.shade300),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            '技術指標：',
+            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              FilterChip(
+                label: const Text('MA (5,10,20)'),
+                selected: _showMA,
+                showCheckmark: false,
+                onSelected: _toggleMA,
+              ),
+              for (final type in IndicatorType.values)
+                FilterChip(
+                  label: Text(type.label),
+                  selected: _selectedIndicators.contains(type),
+                  showCheckmark: false,
+                  onSelected: (_) => _toggleIndicator(type),
+                ),
+            ],
+          ),
         ],
       ),
     );

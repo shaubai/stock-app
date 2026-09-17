@@ -30,17 +30,9 @@ class _StockChartState extends State<StockChart> {
     return Column(
       children: [
         Expanded(
-          flex: 3,
           child: Padding(
             padding: const EdgeInsets.only(right: 16, top: 16),
             child: _buildCandlestickChart(),
-          ),
-        ),
-        Expanded(
-          flex: 1,
-          child: Padding(
-            padding: const EdgeInsets.only(right: 16, bottom: 16),
-            child: _buildVolumeChart(),
           ),
         ),
         if (_touchedIndex != null) _buildTooltip(),
@@ -234,68 +226,6 @@ class _StockChartState extends State<StockChart> {
     return [];
   }
 
-  Widget _buildVolumeChart() {
-    final maxVolume = widget.data
-        .map((d) => d.volume)
-        .reduce((a, b) => a > b ? a : b);
-
-    return BarChart(
-      BarChartData(
-        alignment: BarChartAlignment.spaceAround,
-        maxY: maxVolume.toDouble(),
-        minY: 0,
-        barTouchData: BarTouchData(enabled: false),
-        titlesData: FlTitlesData(
-          leftTitles: AxisTitles(
-            sideTitles: SideTitles(
-              showTitles: true,
-              reservedSize: 50,
-              getTitlesWidget: (value, meta) {
-                return Text(
-                  _formatVolume(value.toInt()),
-                  style: TextStyle(
-                    color: Colors.grey.shade600,
-                    fontSize: 10,
-                  ),
-                );
-              },
-            ),
-          ),
-          rightTitles: const AxisTitles(
-            sideTitles: SideTitles(showTitles: false),
-          ),
-          topTitles: const AxisTitles(
-            sideTitles: SideTitles(showTitles: false),
-          ),
-          bottomTitles: const AxisTitles(
-            sideTitles: SideTitles(showTitles: false),
-          ),
-        ),
-        gridData: const FlGridData(show: false),
-        borderData: FlBorderData(show: false),
-        barGroups: widget.data.asMap().entries.map((entry) {
-          final index = entry.key;
-          final data = entry.value;
-          final isUp = data.close >= data.open;
-
-          return BarChartGroupData(
-            x: index,
-            barRods: [
-              BarChartRodData(
-                toY: data.volume.toDouble(),
-                color: isUp
-                    ? Colors.red.withAlpha((255 * 0.5).round())
-                    : Colors.green.withAlpha((255 * 0.5).round()),
-                width: 3,
-                borderRadius: BorderRadius.zero,
-              ),
-            ],
-          );
-        }).toList(),
-      ),
-    );
-  }
-
   Widget _buildTooltip() {
     if (_touchedIndex == null ||
         _touchedIndex! < 0 ||
@@ -359,6 +289,88 @@ class _StockChartState extends State<StockChart> {
           ),
         ),
       ],
+    );
+  }
+
+  String _formatVolume(int volume) {
+    if (volume >= 1000000000) {
+      return '${(volume / 1000000000).toStringAsFixed(1)}B';
+    } else if (volume >= 1000000) {
+      return '${(volume / 1000000).toStringAsFixed(1)}M';
+    } else if (volume >= 1000) {
+      return '${(volume / 1000).toStringAsFixed(1)}K';
+    }
+    return volume.toString();
+  }
+}
+
+/// 成交量柱狀圖，獨立於 [StockChart]（股價折線圖）之外。
+///
+/// 股票詳情頁需要「選取 RSI/MACD/KD 時置換股價折線圖，但成交量圖保持
+/// 顯示」，因此拆成獨立 widget，而非讓 StockChart 內部用參數控制顯示
+/// 與否（那樣會讓呼叫端需要用兩個 StockChart 實例，反而容易重複渲染）。
+class VolumeChart extends StatelessWidget {
+  final List<HistoricalData> data;
+
+  const VolumeChart({super.key, required this.data});
+
+  @override
+  Widget build(BuildContext context) {
+    if (data.isEmpty) return const SizedBox();
+
+    final maxVolume = data.map((d) => d.volume).reduce((a, b) => a > b ? a : b);
+
+    return Padding(
+      padding: const EdgeInsets.only(right: 16, bottom: 16),
+      child: BarChart(
+        BarChartData(
+          alignment: BarChartAlignment.spaceAround,
+          maxY: maxVolume.toDouble(),
+          minY: 0,
+          barTouchData: BarTouchData(enabled: false),
+          titlesData: FlTitlesData(
+            leftTitles: AxisTitles(
+              sideTitles: SideTitles(
+                showTitles: true,
+                reservedSize: 50,
+                getTitlesWidget: (value, meta) {
+                  return Text(
+                    _formatVolume(value.toInt()),
+                    style: TextStyle(
+                      color: Colors.grey.shade600,
+                      fontSize: 10,
+                    ),
+                  );
+                },
+              ),
+            ),
+            rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+            topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+            bottomTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+          ),
+          gridData: const FlGridData(show: false),
+          borderData: FlBorderData(show: false),
+          barGroups: data.asMap().entries.map((entry) {
+            final index = entry.key;
+            final item = entry.value;
+            final isUp = item.close >= item.open;
+
+            return BarChartGroupData(
+              x: index,
+              barRods: [
+                BarChartRodData(
+                  toY: item.volume.toDouble(),
+                  color: isUp
+                      ? Colors.red.withAlpha((255 * 0.5).round())
+                      : Colors.green.withAlpha((255 * 0.5).round()),
+                  width: 3,
+                  borderRadius: BorderRadius.zero,
+                ),
+              ],
+            );
+          }).toList(),
+        ),
+      ),
     );
   }
 

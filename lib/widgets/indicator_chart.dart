@@ -197,8 +197,7 @@ class _OscillatorChartFrame extends StatelessWidget {
             ],
           ),
         ),
-        SizedBox(
-          height: 120,
+        Expanded(
           child: Padding(
             padding: const EdgeInsets.only(right: 16, bottom: 8),
             child: LineChart(
