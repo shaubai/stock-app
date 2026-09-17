@@ -206,6 +206,12 @@ class _OscillatorChartFrame extends StatelessWidget {
                 maxX: length.toDouble() - 1,
                 minY: minY,
                 maxY: maxY,
+                // 關閉觸控互動：fl_chart 預設開啟時，點擊會彈出浮動數值
+                // 框，其位置計算不考慮圖表外部元件，曾蓋住股票詳情頁
+                // 上方的技術指標選項列（2026/09/17 使用者回報，股價圖表
+                // 已修正）。這些子圖表目前沒有實作對應的固定式 tooltip，
+                // 直接關閉觸控比另外做一套更省事、也不會有相同問題。
+                lineTouchData: const LineTouchData(enabled: false),
                 gridData: const FlGridData(show: false),
                 borderData: FlBorderData(show: false),
                 titlesData: FlTitlesData(

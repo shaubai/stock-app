@@ -21,6 +21,9 @@ class StockChart extends StatefulWidget {
 class _StockChartState extends State<StockChart> {
   int? _touchedIndex;
 
+  // MA 線顏色，圖例與實際畫線共用同一份定義，避免兩處顏色對不上。
+  static const List<Color> _maColors = [Colors.orange, Colors.purple, Colors.green];
+
   @override
   Widget build(BuildContext context) {
     if (widget.data.isEmpty) {
@@ -29,6 +32,7 @@ class _StockChartState extends State<StockChart> {
 
     return Column(
       children: [
+        if (widget.showMA) _buildMALegend(),
         Expanded(
           child: Padding(
             padding: const EdgeInsets.only(right: 16, top: 16),
@@ -59,6 +63,15 @@ class _StockChartState extends State<StockChart> {
         maxX: widget.data.length.toDouble() - 1,
         lineTouchData: LineTouchData(
           enabled: true,
+          // 關閉 fl_chart 內建的浮動數值框：它會疊在圖表上方、甚至蓋到
+          // 圖表外部的技術指標選項列（2026/09/17 使用者回報）。已有
+          // 自訂的 _buildTooltip() 在圖表下方顯示同等（更完整）的
+          // 開高低收量資訊，不需要重複兩套 tooltip。
+          touchTooltipData: LineTouchTooltipData(
+            getTooltipItems: (touchedSpots) => touchedSpots
+                .map((_) => null)
+                .toList(),
+          ),
           touchCallback: (FlTouchEvent event, LineTouchResponse? response) {
             setState(() {
               if (response?.lineBarSpots != null &&
@@ -179,8 +192,36 @@ class _StockChartState extends State<StockChart> {
     );
   }
 
+  Widget _buildMALegend() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      child: Row(
+        children: [
+          for (int i = 0; i < widget.maPeriods.length; i++)
+            Padding(
+              padding: const EdgeInsets.only(right: 12),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 12,
+                    height: 3,
+                    color: _maColors[i % _maColors.length],
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    'MA${widget.maPeriods[i]}',
+                    style: TextStyle(fontSize: 11, color: Colors.grey.shade700),
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
   List<LineChartBarData> _buildMALines() {
-    final colors = [Colors.orange, Colors.purple, Colors.green];
     final lines = <LineChartBarData>[];
 
     for (int i = 0; i < widget.maPeriods.length; i++) {
@@ -193,8 +234,8 @@ class _StockChartState extends State<StockChart> {
             return FlSpot(entry.key.toDouble(), entry.value);
           }).toList(),
           isCurved: true,
-          color: colors[i % colors.length],
-          barWidth: 1.5,
+          color: _maColors[i % _maColors.length],
+          barWidth: 2.5,
           dotData: const FlDotData(show: false),
           dashArray: [5, 5],
         ),
@@ -247,9 +288,18 @@ class _StockChartState extends State<StockChart> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            '${data.date.year}/${data.date.month}/${data.date.day}',
-            style: const TextStyle(fontWeight: FontWeight.bold),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                '${data.date.year}/${data.date.month}/${data.date.day}',
+                style: const TextStyle(fontWeight: FontWeight.bold),
+              ),
+              GestureDetector(
+                onTap: () => setState(() => _touchedIndex = null),
+                child: Icon(Icons.close, size: 18, color: Colors.grey.shade600),
+              ),
+            ],
           ),
           const SizedBox(height: 4),
           Row(
