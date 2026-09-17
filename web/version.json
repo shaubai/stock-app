@@ -1,6 +1,6 @@
 {
-  "version": "1.0.6",
-  "downloadUrl": "https://github.com/shaubai/stock-app/releases/download/v1.0.6/app-release.apk",
-  "releaseNotes": "新增功能與優化\n• 股票詳情頁新增技術指標：RSI、MACD、KD\n• 股票資料 API 請求新增自動重試機制",
+  "version": "1.0.7",
+  "downloadUrl": "https://github.com/shaubai/stock-app/releases/download/v1.0.7/app-release.apk",
+  "releaseNotes": "新增功能與修正\n• 股票看板改用伺服器端維護的觀察股清單\n• 修正圖表浮動數值框蓋住技術指標選項列的問題",
   "forceUpdate": false
 }
