@@ -1,6 +1,6 @@
 {
-  "version": "1.0.7",
-  "downloadUrl": "https://github.com/shaubai/stock-app/releases/download/v1.0.7/app-release.apk",
-  "releaseNotes": "新增功能與修正\n• 股票看板改用伺服器端維護的觀察股清單\n• 修正圖表浮動數值框蓋住技術指標選項列的問題",
+  "version": "1.0.8",
+  "downloadUrl": "https://github.com/shaubai/stock-app/releases/download/v1.0.8/app-release.apk",
+  "releaseNotes": "新增功能\n• App 開啟時，若已有自選股，直接顯示自選股分頁",
   "forceUpdate": false
 }
