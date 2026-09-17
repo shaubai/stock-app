@@ -1,8 +1,8 @@
 import 'dart:convert';
-import 'package:http/http.dart' as http;
 import 'package:flutter/foundation.dart' show kIsWeb;
 import '../models/stock.dart';
 import '../models/historical_data.dart';
+import 'http_retry_client.dart';
 
 class StockService {
   // Vercel API proxy (用於 Web 平台避免 CORS 問題)
@@ -14,6 +14,8 @@ class StockService {
   // US stock API (使用 Yahoo Finance API - 免費但有限制)
   // 注意：實際使用時可能需要申請 API key
   static const String _usStockApiBase = 'https://query1.finance.yahoo.com/v8/finance';
+
+  final HttpRetryClient _httpClient = HttpRetryClient();
 
   /// 取得台股即時報價
   Future<Stock?> getTaiwanStock(String symbol) async {
@@ -28,7 +30,7 @@ class StockService {
         url = Uri.parse('$_twStockApiBase/getStockInfo.jsp?ex_ch=tse_$symbol.tw');
       }
 
-      final response = await http.get(url);
+      final response = await _httpClient.get(url);
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
@@ -62,7 +64,7 @@ class StockService {
         url = Uri.parse('$_twStockApiBase/getStockInfo.jsp?ex_ch=$exChList');
       }
 
-      final response = await http.get(url);
+      final response = await _httpClient.get(url);
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
@@ -85,7 +87,7 @@ class StockService {
     try {
       // 使用 Yahoo Finance API
       final url = Uri.parse('$_usStockApiBase/quote?symbols=$symbol');
-      final response = await http.get(url);
+      final response = await _httpClient.get(url);
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
@@ -190,7 +192,7 @@ class StockService {
           );
         }
 
-        final response = await http.get(url);
+        final response = await _httpClient.get(url);
 
         if (response.statusCode == 200) {
           final data = json.decode(response.body);
