@@ -38,6 +38,18 @@ class WatchlistProvider with ChangeNotifier {
   Future<void> init() async {
     if (_isInitialized) return;
 
+    // Guarantees a real async boundary before the first notifyListeners().
+    // Without this, a caller that invokes init() synchronously from
+    // initState() (as AuthWrapper does — see main.dart) could have this
+    // notifyListeners() fire while Flutter is still in the middle of the
+    // current build phase, which throws ("setState() or markNeedsBuild()
+    // called during build"). On a real device this was masked by
+    // StorageService's own I/O (a real platform channel call) guaranteeing
+    // that gap; it surfaced only under sqflite_common_ffi in tests, where
+    // storage calls can resolve fast enough to stay within the same
+    // microtask/build phase. See test/widget_test.dart.
+    await Future.microtask(() {});
+
     _isLoading = true;
     notifyListeners();
 

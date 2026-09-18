@@ -40,14 +40,18 @@ void main() async {
 
 class MyApp extends StatelessWidget {
   final WatchlistProvider watchlistProvider;
+  // Injectable only so tests can supply an AuthProvider backed by a fake
+  // AuthServiceBase instead of the real Firebase-backed AuthService — see
+  // test/widget_test.dart. Production (main()) never passes this.
+  final AuthProvider? authProvider;
 
-  const MyApp({super.key, required this.watchlistProvider});
+  const MyApp({super.key, required this.watchlistProvider, this.authProvider});
 
   @override
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
-        ChangeNotifierProvider(create: (_) => AuthProvider()),
+        ChangeNotifierProvider(create: (_) => authProvider ?? AuthProvider()),
         ChangeNotifierProvider.value(value: watchlistProvider),
         ChangeNotifierProvider(create: (_) => StockProvider()),
       ],
