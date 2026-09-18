@@ -1,6 +1,6 @@
 {
-  "version": "1.1.0",
-  "downloadUrl": "https://github.com/shaubai/stock-app/releases/download/v1.1.0/app-release.apk",
-  "releaseNotes": "新增功能\n• 股票詳情頁的股價圖表改為蠟燭圖（K 線圖），取代原本的折線圖\n• MA 移動平均線改為實線，配色對齊 Yahoo 財經慣例，並預設開啟顯示\n\n修正\n• 修復自動化測試環境長期無法正常執行的問題（smoke test）",
+  "version": "1.2.0",
+  "downloadUrl": "https://github.com/shaubai/stock-app/releases/download/v1.2.0/app-release.apk",
+  "releaseNotes": "新增功能\n• Web 版偵測到新版本時自動重新整理，不需要使用者手動清除快取\n• 個人頁新增顯示目前 App 版本號",
   "forceUpdate": false
 }
