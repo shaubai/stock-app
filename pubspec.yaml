@@ -74,6 +74,11 @@ dev_dependencies:
   # main.dart.js filename for cache busting.
   crypto: ^3.0.3
 
+  # Runs a real SQLite engine (not a mock) in plain Dart tests, so
+  # StorageServiceMobile's schema/migration logic can be tested without an
+  # emulator or device.
+  sqflite_common_ffi: ^2.3.4
+
   # The "flutter_lints" package below contains a set of recommended lints to
   # encourage good coding practices. The lint set provided by the package is
   # activated in the `analysis_options.yaml` file located at the root of your

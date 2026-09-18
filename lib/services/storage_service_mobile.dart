@@ -13,12 +13,20 @@ class StorageServiceMobile implements StorageService {
   static const String _columnAddedAt = 'added_at';
   static const String _columnSortOrder = 'sort_order';
 
+  // Overridable only so tests can point two separate instances at the same
+  // file to exercise onCreate/onUpgrade against a pre-existing v1 database —
+  // see test/services/storage_service_mobile_test.dart. Not intended to be
+  // set by production callers; createStorageService() never passes it.
+  final String databaseFileName;
+
+  StorageServiceMobile({this.databaseFileName = 'stock_app.db'});
+
   @override
   Future<void> init() async {
     if (_database != null) return;
 
     final databasesPath = await getDatabasesPath();
-    final path = join(databasesPath, 'stock_app.db');
+    final path = join(databasesPath, databaseFileName);
 
     _database = await openDatabase(
       path,
