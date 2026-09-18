@@ -1,6 +1,10 @@
 #!/bin/bash
 # Automates the full release flow: version bump, release notes draft,
-# Android APK + GitHub Release, Web build + Firebase deploy, commit + tag.
+# commit + push, Android APK + GitHub Release, Web build + Firebase deploy.
+#
+# Order is commit-then-build (not build-then-commit) so that `gh release
+# create`'s auto-created git tag lands on the actual release commit — see
+# the comment above the commit step for why this matters.
 #
 # ============================================================================
 # ⚠️  SPECIAL CASE: this script auto-pushes to origin/main.
@@ -24,13 +28,17 @@
 #   ./tool/release.sh --notes "..."    # skip the notes editor, use this text
 #
 # On any failure, the script stops immediately (set -e) and does not attempt
-# to roll back already-completed steps (e.g. an already-committed pubspec.yaml
-# bump, or an already-created GitHub Release) — surviving partial state is
+# to roll back already-completed steps — surviving partial state is
 # intentional so a human can decide what to do next rather than the script
-# guessing. Re-running after fixing the issue will redo completed steps
-# (bump/build are idempotent; gh release create and firebase deploy will
-# simply overwrite), except a git commit already made — check `git log` and
-# `git status` before re-running.
+# guessing. Because commit+push happens before build/release/deploy, a
+# build or deploy failure leaves main with a version bump that wasn't
+# actually released (see the comment above the commit step for why this
+# tradeoff was chosen over the alternative). Re-running after fixing the
+# issue will redo completed steps (build is idempotent; gh release create
+# and firebase deploy will simply overwrite), except the commit+push
+# already made — check `git log` and `git status` before re-running; you
+# may need to fix forward with a new commit rather than re-running from
+# scratch.
 
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -149,6 +157,58 @@ echo "==> pubspec.yaml updated"
 
 APK_DOWNLOAD_URL="https://github.com/shaubai/stock-app/releases/download/v${NEW_NAME}/app-release.apk"
 
+# web/version.json's downloadUrl always points at the APK release, even on
+# a --web-only release — that field only matters to Android's in-app
+# update check, so it's harmless to leave pointed at the last real APK
+# version, but pointing at the current version number is misleading if no
+# matching APK was published. Only touch it when we actually built one.
+if [[ "$PLATFORMS" == "both" ]]; then
+  # Built with jq rather than string-templated JSON: release notes can
+  # contain quotes/backslashes/newlines, and jq is the only approach here
+  # that escapes all of them correctly (verified: a hand-rolled sed-based
+  # \n substitution produced syntactically invalid JSON that the app's
+  # update check would have silently failed to parse).
+  jq -n \
+    --arg version "$NEW_NAME" \
+    --arg downloadUrl "$APK_DOWNLOAD_URL" \
+    --arg releaseNotes "$RELEASE_NOTES" \
+    '{version: $version, downloadUrl: $downloadUrl, releaseNotes: $releaseNotes, forceUpdate: false}' \
+    > web/version.json
+  echo "==> web/version.json updated"
+
+  # Keep the download page's version string and APK link in sync too.
+  sed -i '' "s#最新版本：v[0-9.]*#最新版本：v${NEW_NAME}#" web/download/index.html
+  sed -i '' "s#releases/download/v[0-9.]*/app-release.apk#releases/download/v${NEW_NAME}/app-release.apk#" web/download/index.html
+  echo "==> web/download/index.html updated"
+fi
+
+# ---- Commit + push FIRST, then build/release/deploy ----
+#
+# Deliberately committing and pushing the version bump before running
+# `gh release create` or `firebase deploy`, even though a build/deploy
+# failure after this point leaves main with a version bump that wasn't
+# actually released. The alternative (commit last) was tried and broke:
+# `gh release create` creates its own remote tag pointed at whatever
+# commit was HEAD when it ran; committing afterwards then makes a NEW
+# commit, so a separately-created local `git tag` for the same version
+# points at a different commit than the one `gh` already pushed — causing
+# `git push origin v${NEW_NAME}` to be rejected as already-existing
+# (hit this in practice: v1.1.0's tag pushed by `gh` pointed at the
+# pre-release commit, while the script's own `git tag` pointed at the
+# release commit created afterwards). Committing first means `gh release
+# create` runs against the actual release commit, so its auto-created tag
+# is correct and the script never needs to create or push a tag itself.
+echo "==> Committing release..."
+git add pubspec.yaml
+[[ "$PLATFORMS" == "both" ]] && git add web/version.json web/download/index.html
+
+git commit -m "chore: release v${NEW_NAME}
+
+${RELEASE_NOTES}"
+
+echo "==> Pushing to origin/main..."
+git push origin main
+
 # ---- Android APK + GitHub Release ----
 if [[ "$PLATFORMS" == "both" || "$PLATFORMS" == "apk" ]]; then
   echo "==> Building release APK..."
@@ -162,52 +222,12 @@ fi
 
 # ---- Web build + Firebase deploy ----
 if [[ "$PLATFORMS" == "both" || "$PLATFORMS" == "web" ]]; then
-  # web/version.json's downloadUrl always points at the APK release, even on
-  # a --web-only release — that field only matters to Android's in-app
-  # update check, so it's harmless to leave pointed at the last real APK
-  # version, but pointing at the current version number is misleading if no
-  # matching APK was published. Only touch it when we actually built one.
-  if [[ "$PLATFORMS" == "both" ]]; then
-    # Built with jq rather than string-templated JSON: release notes can
-    # contain quotes/backslashes/newlines, and jq is the only approach here
-    # that escapes all of them correctly (verified: a hand-rolled sed-based
-    # \n substitution produced syntactically invalid JSON that the app's
-    # update check would have silently failed to parse).
-    jq -n \
-      --arg version "$NEW_NAME" \
-      --arg downloadUrl "$APK_DOWNLOAD_URL" \
-      --arg releaseNotes "$RELEASE_NOTES" \
-      '{version: $version, downloadUrl: $downloadUrl, releaseNotes: $releaseNotes, forceUpdate: false}' \
-      > web/version.json
-    echo "==> web/version.json updated"
-
-    # Keep the download page's version string and APK link in sync too.
-    sed -i '' "s#最新版本：v[0-9.]*#最新版本：v${NEW_NAME}#" web/download/index.html
-    sed -i '' "s#releases/download/v[0-9.]*/app-release.apk#releases/download/v${NEW_NAME}/app-release.apk#" web/download/index.html
-    echo "==> web/download/index.html updated"
-  fi
-
   echo "==> Building web (with cache-busting hash)..."
   ./tool/build_web.sh
 
   echo "==> Deploying to Firebase Hosting..."
   firebase deploy --only hosting
 fi
-
-# ---- Commit, tag, push ----
-echo "==> Committing release..."
-git add pubspec.yaml
-[[ "$PLATFORMS" == "both" ]] && git add web/version.json web/download/index.html
-
-git commit -m "chore: release v${NEW_NAME}
-
-${RELEASE_NOTES}"
-
-git tag "v${NEW_NAME}"
-
-echo "==> Pushing to origin/main (including tag)..."
-git push origin main
-git push origin "v${NEW_NAME}"
 
 echo ""
 echo "✅ Released v${NEW_NAME}"
