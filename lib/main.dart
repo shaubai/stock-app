@@ -13,6 +13,8 @@ import 'providers/stock_provider.dart';
 import 'services/storage_service_factory.dart';
 import 'services/storage_service_firestore.dart';
 import 'services/update_service.dart';
+import 'services/web_update_checker.dart';
+import 'widgets/app_version_text.dart';
 import 'widgets/update_dialog.dart';
 
 void main() async {
@@ -111,11 +113,15 @@ class _AuthWrapperState extends State<AuthWrapper> {
       await watchlistProvider.init();
     }
 
-    // Check for updates (Android only: downloadUrl currently points to an
-    // APK, which is meaningless on iOS/Web — iOS updates go through the
-    // App Store instead)
+    // Check for updates. Android: downloadUrl points to an APK, so show a
+    // dialog prompting a manual download (iOS updates go through the App
+    // Store instead, so this is skipped there). Web: no download step
+    // needed — a newer build is already live on Firebase Hosting the
+    // moment it's deployed, so just reload the page silently.
     if (!kIsWeb && Platform.isAndroid) {
       _checkForUpdates();
+    } else if (kIsWeb) {
+      checkForWebUpdateAndReload();
     }
   }
 
@@ -321,6 +327,9 @@ class ProfileScreen extends StatelessWidget {
               }
             },
           ),
+          const SizedBox(height: 24),
+          const Center(child: AppVersionText()),
+          const SizedBox(height: 16),
         ],
       ),
     );
