@@ -22,7 +22,8 @@ class _StockChartState extends State<StockChart> {
   int? _touchedIndex;
 
   // MA 線顏色，圖例與實際畫線共用同一份定義，避免兩處顏色對不上。
-  static const List<Color> _maColors = [Colors.orange, Colors.purple, Colors.green];
+  // 對齊 Yahoo 財經慣例配色（MA5 淡藍／MA10 紫／MA20 橘紅）。
+  static const List<Color> _maColors = [Color(0xFF42A5F5), Color(0xFF9C27B0), Color(0xFFFF5722)];
 
   @override
   Widget build(BuildContext context) {
@@ -36,7 +37,7 @@ class _StockChartState extends State<StockChart> {
         Expanded(
           child: Padding(
             padding: const EdgeInsets.only(right: 16, top: 16),
-            child: _buildCandlestickChart(),
+            child: _buildChart(),
           ),
         ),
         if (_touchedIndex != null) _buildTooltip(),
@@ -44,7 +45,12 @@ class _StockChartState extends State<StockChart> {
     );
   }
 
-  Widget _buildCandlestickChart() {
+  /// K 線（蠟燭圖）與 MA 疊加線分屬 fl_chart 兩種不同的圖表類型
+  /// （CandlestickChart / LineChart），無法像單一 LineChart 那樣把
+  /// 多條線放進同一份 lineBarsData 裡混搭，因此用 Stack 疊放兩層，
+  /// 並讓兩層共用完全相同的 minX/maxX/minY/maxY，確保座標對齊。
+  /// MA 那層關閉自己的網格線／座標軸／背景，只畫線本身。
+  Widget _buildChart() {
     final maxPrice = widget.data
         .map((d) => d.high)
         .reduce((a, b) => a > b ? a : b);
@@ -54,53 +60,52 @@ class _StockChartState extends State<StockChart> {
 
     final priceRange = maxPrice - minPrice;
     final padding = priceRange * 0.1;
+    final minY = minPrice - padding;
+    final maxY = maxPrice + padding;
+    final minX = 0.0;
+    final maxX = widget.data.length.toDouble() - 1;
 
+    return Stack(
+      children: [
+        // 三層由下到上：座標軸／網格線（純背景，不畫任何資料）→ MA 線
+        // （疊加指標，可被 K 線蓋住）→ K 線本體（蠟燭圖，永遠最上層可見）。
+        // fl_chart 沒有辦法把「網格線」從單一 CandlestickChart/LineChart
+        // widget 中抽出來單獨排序，所以改用一個 lineBarsData 為空的
+        // LineChart 專門畫座標軸與網格線；K 線層與 MA 層各自關閉自己的
+        // gridData/titlesData，避免三層各畫一份互相打架。
+        IgnorePointer(
+          child: _buildAxisLayer(minX: minX, maxX: maxX, minY: minY, maxY: maxY, priceRange: priceRange),
+        ),
+        if (widget.showMA)
+          IgnorePointer(
+            // MA 線本身不接收觸控——K 線層已經處理點擊顯示 tooltip，
+            // 疊上去的這層若也吃觸控事件，會擋住底下的 CandlestickChart。
+            child: _buildMALayer(minX: minX, maxX: maxX, minY: minY, maxY: maxY),
+          ),
+        _buildCandlestickLayer(minX: minX, maxX: maxX, minY: minY, maxY: maxY),
+      ],
+    );
+  }
+
+  /// 只畫座標軸與網格線的背景層，不畫任何蠟燭／線段資料（用 LineChart
+  /// 而非 CandlestickChart 承載，見呼叫端註解）。
+  Widget _buildAxisLayer({
+    required double minX,
+    required double maxX,
+    required double minY,
+    required double maxY,
+    required double priceRange,
+  }) {
+    // 用 LineChart（lineBarsData 留空）取代 CandlestickChart 畫座標軸／
+    // 網格線：只是借用 fl_chart 圖表元件的座標軸繪製能力，不需要蠟燭圖
+    // 才有的渲染器／觸控資料結構，LineChart 是專案裡本來就在用的最
+    // 輕量選項，沒有理由為了「不畫任何東西」載入更重的元件。
     return LineChart(
       LineChartData(
-        minY: minPrice - padding,
-        maxY: maxPrice + padding,
-        minX: 0,
-        maxX: widget.data.length.toDouble() - 1,
-        lineTouchData: LineTouchData(
-          enabled: true,
-          // 關閉 fl_chart 內建的浮動數值框：它會疊在圖表上方、甚至蓋到
-          // 圖表外部的技術指標選項列（2026/09/17 使用者回報）。已有
-          // 自訂的 _buildTooltip() 在圖表下方顯示同等（更完整）的
-          // 開高低收量資訊，不需要重複兩套 tooltip。
-          touchTooltipData: LineTouchTooltipData(
-            getTooltipItems: (touchedSpots) => touchedSpots
-                .map((_) => null)
-                .toList(),
-          ),
-          touchCallback: (FlTouchEvent event, LineTouchResponse? response) {
-            setState(() {
-              if (response?.lineBarSpots != null &&
-                  response!.lineBarSpots!.isNotEmpty) {
-                _touchedIndex = response.lineBarSpots!.first.x.toInt();
-              } else {
-                _touchedIndex = null;
-              }
-            });
-          },
-          getTouchedSpotIndicator: (barData, spotIndexes) {
-            return spotIndexes.map((index) {
-              return TouchedSpotIndicatorData(
-                const FlLine(color: Colors.blue, strokeWidth: 2),
-                FlDotData(
-                  show: true,
-                  getDotPainter: (spot, percent, barData, index) {
-                    return FlDotCirclePainter(
-                      radius: 4,
-                      color: Colors.blue,
-                      strokeWidth: 2,
-                      strokeColor: Colors.white,
-                    );
-                  },
-                ),
-              );
-            }).toList();
-          },
-        ),
+        minX: minX,
+        maxX: maxX,
+        minY: minY,
+        maxY: maxY,
         gridData: FlGridData(
           show: true,
           drawVerticalLine: false,
@@ -160,34 +165,84 @@ class _StockChartState extends State<StockChart> {
           ),
         ),
         borderData: FlBorderData(show: false),
-        lineBarsData: [
-          // 主要價格線（連接收盤價）
-          LineChartBarData(
-            spots: widget.data.asMap().entries.map((entry) {
-              return FlSpot(entry.key.toDouble(), entry.value.close);
-            }).toList(),
-            isCurved: true,
-            color: Colors.blue,
-            barWidth: 2,
-            dotData: const FlDotData(show: false),
-            belowBarData: BarAreaData(
-              show: true,
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [
-                  Colors.blue.withAlpha((255 * 0.3).round()),
-                  Colors.blue.withAlpha(0),
-                ],
-              ),
-            ),
-          ),
-          // MA 均線（如果啟用）
-          if (widget.showMA) ..._buildMALines(),
-        ],
-        extraLinesData: ExtraLinesData(
-          horizontalLines: _buildCandlesticks(),
+      ),
+    );
+  }
+
+  Widget _buildMALayer({
+    required double minX,
+    required double maxX,
+    required double minY,
+    required double maxY,
+  }) {
+    return LineChart(
+      LineChartData(
+        minX: minX,
+        maxX: maxX,
+        minY: minY,
+        maxY: maxY,
+        lineTouchData: const LineTouchData(enabled: false),
+        gridData: const FlGridData(show: false),
+        titlesData: const FlTitlesData(show: false),
+        borderData: FlBorderData(show: false),
+        lineBarsData: _buildMALines(),
+      ),
+    );
+  }
+
+  Widget _buildCandlestickLayer({
+    required double minX,
+    required double maxX,
+    required double minY,
+    required double maxY,
+  }) {
+    return CandlestickChart(
+      CandlestickChartData(
+        minX: minX,
+        maxX: maxX,
+        minY: minY,
+        maxY: maxY,
+        candlestickSpots: widget.data.asMap().entries.map((entry) {
+          final d = entry.value;
+          return CandlestickSpot(
+            x: entry.key.toDouble(),
+            open: d.open,
+            high: d.high,
+            low: d.low,
+            close: d.close,
+          );
+        }).toList(),
+        // 紅漲綠跌（台股慣例），對齊 VolumeChart／_buildTooltip 既有配色。
+        candlestickPainter: DefaultCandlestickPainter(
+          candlestickStyleProvider: (spot, index) {
+            final color = spot.isUp ? Colors.red : Colors.green;
+            return CandlestickStyle(
+              lineColor: color,
+              lineWidth: 1,
+              bodyStrokeColor: color,
+              bodyStrokeWidth: 0,
+              bodyFillColor: color,
+              bodyWidth: 4,
+              bodyRadius: 0,
+            );
+          },
         ),
+        candlestickTouchData: CandlestickTouchData(
+          // 關閉內建浮動 tooltip：同一個理由是 2026/09/17 修過的折線圖
+          // tooltip 遮擋問題——自訂的 _buildTooltip() 顯示在圖表下方，
+          // 不會蓋住技術指標選項列。
+          handleBuiltInTouches: false,
+          touchCallback: (FlTouchEvent event, CandlestickTouchResponse? response) {
+            setState(() {
+              _touchedIndex = response?.touchedSpot?.spotIndex;
+            });
+          },
+        ),
+        // 座標軸與網格線交給 _buildAxisLayer 那層畫，這裡關閉避免
+        // 兩層都畫一次（K 線層疊在最上層，重複的網格線只會蓋住 MA）。
+        gridData: const FlGridData(show: false),
+        titlesData: const FlTitlesData(show: false),
+        borderData: FlBorderData(show: false),
       ),
     );
   }
@@ -235,9 +290,8 @@ class _StockChartState extends State<StockChart> {
           }).toList(),
           isCurved: true,
           color: _maColors[i % _maColors.length],
-          barWidth: 2.5,
+          barWidth: 1.0,
           dotData: const FlDotData(show: false),
-          dashArray: [5, 5],
         ),
       );
     }
@@ -261,12 +315,6 @@ class _StockChartState extends State<StockChart> {
     return ma;
   }
 
-  List<HorizontalLine> _buildCandlesticks() {
-    // 使用 ExtraLinesData 繪製蠟燭圖效果（簡化版）
-    // 注意：fl_chart 沒有內建蠟燭圖，這裡用線條模擬
-    return [];
-  }
-
   Widget _buildTooltip() {
     if (_touchedIndex == null ||
         _touchedIndex! < 0 ||
@@ -275,7 +323,9 @@ class _StockChartState extends State<StockChart> {
     }
 
     final data = widget.data[_touchedIndex!];
-    final isUp = data.close >= data.open;
+    // 與 CandlestickSpot.isUp（close > open，嚴格大於）保持一致，避免
+    // 平盤（收盤=開盤）時蠟燭圖顏色與 tooltip 文字顏色矛盾。
+    final isUp = data.close > data.open;
 
     return Container(
       padding: const EdgeInsets.all(8),

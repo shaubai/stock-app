@@ -24,7 +24,7 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
   List<HistoricalData> _historicalData = [];
   bool _isLoading = false;
   String _selectedPeriod = '1M'; // 1D, 5D, 1M, 3M, 1Y
-  bool _showMA = false;
+  bool _showMA = true;
 
   // 震盪指標（RSI/MACD/KD）選中狀態。用 Set 而非單一 nullable 值儲存，
   // 即使目前 UI 與渲染都只處理單一選取（見下方圖表區的
